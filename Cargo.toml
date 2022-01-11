@@ -1,0 +1,12 @@
+[package]
+name = "rosu"
+version = "0.1.0"
+authors = ["tsunyoku <tsunyoku@gmail.com>", "RealistikDash <idk>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "1.14.0", features = ["full"] }
+ntex = { version = "0.5.8", features= ["tokio"] }
+bincode = "0.7"
+byteorder = "1.0"
+serde = "0.9"
