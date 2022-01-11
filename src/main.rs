@@ -26,13 +26,10 @@ async fn bancho(_data: Bytes, _req: HttpRequest) -> HttpResponse {
     );
 
     let packet_data = unsafe { String::from_utf8_unchecked(return_data) };
-    let mut resp = HttpResponse::from(packet_data);
-    
-    let token_header = HeaderName::from_lowercase(b"cho-token").unwrap();
-    let token_value = HeaderValue::from_str("no").unwrap();
-    resp.headers_mut().insert(token_header, token_value);
 
-    return resp;
+    return HttpResponse::Ok()
+            .header("cho-token", "no")
+            .body(packet_data);
 }
 
 async fn handle_conn(_data: Bytes, req: HttpRequest) -> HttpResponse {
