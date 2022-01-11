@@ -8,6 +8,7 @@ pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {
     return bincode::endian_choice::serialize::<_, _, LittleEndian>(data, Infinite).unwrap();
 }
 
+#[inline(always)]
 pub fn write<T: Serialize>(packet: Packets, data: T) -> Vec<u8>{
     let mut bytes = Vec::new();
 
