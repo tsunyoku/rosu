@@ -9,7 +9,7 @@ use crate::packets::packets::Packets;
 use crate::packets::writer;
 
 async fn index(_req: HttpRequest) -> &'static str {
-    return "rosu 2021:tm:";
+    return "rosu 2022:tm:";
 }
 
 async fn bancho(_data: Bytes) -> HttpResponse {
