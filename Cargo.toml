@@ -1,7 +1,7 @@
 [package]
 name = "rosu"
 version = "0.1.0"
-authors = ["tsunyoku <tsunyoku@gmail.com>", "RealistikDash <idk>"]
+authors = ["tsunyoku <tsunyoku@gmail.com>", "RealistikDash <realistikdash@gmail.com>"]
 edition = "2018"
 
 [dependencies]
