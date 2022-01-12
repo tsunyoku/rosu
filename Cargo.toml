@@ -12,3 +12,9 @@ byteorder = "1.0"
 serde = "0.9"
 sqlx = { version = "0.5", features = ["runtime-tokio-rustls", "mysql", "macros"] }
 bcrypt = "0.10.1"
+uuid = { version = "0.8.1", features = ["v4"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"

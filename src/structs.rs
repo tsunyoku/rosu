@@ -2,6 +2,7 @@ use serde::{Serialize, Serializer};
 
 macro_rules! pub_struct { // w.
     ($name:ident {$($field:ident: $t:ty,)*}) => {
+        #[derive(Clone)]
         pub struct $name {
             $(pub $field: $t),*
         }
@@ -18,13 +19,13 @@ pub_struct!(User {
     salt: String, // unused
     email: String,
     register_datetime: i32,
-    rank: i32,
-    allowed: i32,
+    rank: i8,
+    allowed: i8,
     latest_activity: i32,
     silence_end: i32,
     silence_reason: String,
-    password_version: i32, // unused
-    privileges: i32, // TODO: privilege enum
+    password_version: i8, // unused
+    privileges: i64, // TODO: privilege enum
     donor_expire: i32,
     flags: i32,
     achievements_version: i32, // unused
@@ -37,24 +38,26 @@ pub_struct!(User {
     freezedate: i32,
     firstloginafterfrozen: i32,
 
-    bypass_hwid: i32,
+    bypass_hwid: i8,
     ban_reason: String,
 
     // set upon login, not from db.
     utc_offset: i32,
     country: String,
-    geoloc: i32,
-    bancho_priv: i32, // TODO: bancho privilege enum
-    long: i32,
-    lat: i32,
+    geoloc: u8,
+    bancho_priv: u8, // TODO: bancho privilege enum
+    long: f32,
+    lat: f32,
 
     // status stuff
     action: Action,
     info_text: String,
     map_md5: String,
     mods: i32, // TODO: enum
-    current_mode: i32, // TODO: mode enum/struct/class/idk
+    current_mode: u8, // TODO: mode enum/struct/class/idk
     map_id: i32,
+
+    token: String, // rando token
 });
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

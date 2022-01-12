@@ -1,4 +1,8 @@
+extern crate alloc;
+
 use byteorder::LittleEndian;
+use alloc::string::String;
+use alloc::vec::Vec;
 use bincode::Infinite;
 use serde::Serialize;
 
@@ -12,20 +16,29 @@ pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {
 
 #[inline(always)]
 pub fn write_raw<T: Serialize>(data: T) -> Vec<u8> {
-    let mut data_bytes: Vec<u8>;
-
-    if std::any::type_name::<T>() == "String" {
+    let mut data_bytes: Vec<u8> = Vec::new();
+    
+    if std::any::type_name::<T>() == "&alloc::string::String" {
         let packet_string = unsafe {
-            std::mem::transmute_copy::<T, String>(&data)
+            std::mem::transmute_copy::<T, &alloc::string::String>(&data)
         };
 
-        data_bytes = write_osu_string(packet_string);
+        data_bytes = write_osu_string(packet_string.to_string());
     } else if std::any::type_name::<T>() == "&str" {
         let packet_str = unsafe {
             std::mem::transmute_copy::<T, &str>(&data)
         };
 
         data_bytes = write_osu_string(packet_str.to_string());
+    } else if std::any::type_name::<T>() == "&alloc::vec::Vec<i32>" {
+        let int_list = unsafe {
+            std::mem::transmute_copy::<T, &alloc::vec::Vec<i32>>(&data)
+        };
+
+        data_bytes.append(&mut pack(&(int_list.len() as u16)));
+        for data_elem in int_list {
+            data_bytes.append(&mut write_raw(data_elem));
+        }
     } else {
         data_bytes = pack(&data);
     }
@@ -40,10 +53,12 @@ pub fn write<T: Into<Option<T>> + Serialize>(packet: Packets, _data: T) -> Vec<u
     bytes.append(&mut pack(&(packet as i16)));
     bytes.push(0);
 
-    let mut data_bytes: Vec<u8>;
+    let mut data_bytes: Vec<u8> = Vec::new();
 
-    if let Some(data) = _data.into() {
-        data_bytes = write_raw(data);
+    if std::any::type_name::<T>() != "core::option::Option<()>" {
+        if let Some(data) = _data.into() {
+            data_bytes = write_raw(data);
+        }
     }
 
     let mut data_len = pack(&(data_bytes.len() as u32));
@@ -52,24 +67,6 @@ pub fn write<T: Into<Option<T>> + Serialize>(packet: Packets, _data: T) -> Vec<u
     if !data_bytes.is_empty() { // some packets don't have data, as we can see by Option argument.
         bytes.append(&mut data_bytes);
     }
-
-    return bytes;
-}
-
-#[inline(always)]
-pub fn write_vec<T: Serialize>(packet: Packets, _data: Vec<T>) -> Vec<u8> {
-    let mut bytes: Vec<u8>;
-
-    bytes.append(&mut pack(&(packet as i16)));
-    bytes.push(0);
-
-    for data_elem in _data {
-        bytes.append(&mut write_raw(data_elem));
-    }
-
-    let mut data_len = pack(&(bytes.len() as u32));
-    bytes.append(&mut data_len);
-    bytes.append(&mut bytes);
 
     return bytes;
 }
@@ -122,7 +119,7 @@ pub fn user_presence(user: &structs::User) -> Vec<u8> {
     packet_vec.push(0);
 
     // overall data is added here
-    let mut data_vec: Vec<u8>;
+    let mut data_vec: Vec<u8> = Vec::new();
 
     data_vec.append(
         &mut write_raw(&user.id)
@@ -137,7 +134,7 @@ pub fn user_presence(user: &structs::User) -> Vec<u8> {
     );
 
     data_vec.append(
-        &mut write_raw(&user.country)
+        &mut write_raw(&user.geoloc)
     );
 
     data_vec.append(
@@ -166,7 +163,7 @@ pub fn user_presence(user: &structs::User) -> Vec<u8> {
 
 #[inline(always)]
 pub fn user_stats(user: &structs::User) -> Vec<u8> {
-    let mut packet_vec = Vec::new();
+    let mut packet_vec: Vec<u8> = Vec::new();
 
     // manual construction :(
     packet_vec.append(
@@ -175,14 +172,14 @@ pub fn user_stats(user: &structs::User) -> Vec<u8> {
     packet_vec.push(0);
 
     // overall data is added here
-    let mut data_vec: Vec<u8>;
+    let mut data_vec: Vec<u8> = Vec::new();
 
     data_vec.append(
         &mut write_raw(&user.id)
     );
 
     data_vec.append(
-        &mut write_raw(&user.action)
+        &mut write_raw(user.action as u8)
     );
 
     data_vec.append(
