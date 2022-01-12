@@ -3,18 +3,15 @@ use bincode::Infinite;
 use serde::Serialize;
 
 use crate::packets::packets::Packets;
+use crate::structs;
 
+#[inline(always)]
 pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {
     return bincode::endian_choice::serialize::<_, _, LittleEndian>(data, Infinite).unwrap();
 }
 
 #[inline(always)]
-pub fn write<T: Serialize>(packet: Packets, data: T) -> Vec<u8>{
-    let mut bytes = Vec::new();
-
-    bytes.append(&mut pack(&(packet as i16)));
-    bytes.push(0);
-
+pub fn write_raw<T: Serialize>(data: T) -> Vec<u8> {
     let mut data_bytes: Vec<u8>;
 
     if std::any::type_name::<T>() == "String" {
@@ -33,14 +30,51 @@ pub fn write<T: Serialize>(packet: Packets, data: T) -> Vec<u8>{
         data_bytes = pack(&data);
     }
 
-    let mut data_len = pack(&(data_bytes.len() as u32));
+    return data_bytes;
+}
 
+#[inline(always)]
+pub fn write<T: Into<Option<T>> + Serialize>(packet: Packets, _data: T) -> Vec<u8>{
+    let mut bytes = Vec::new();
+
+    bytes.append(&mut pack(&(packet as i16)));
+    bytes.push(0);
+
+    let mut data_bytes: Vec<u8>;
+
+    if let Some(data) = _data.into() {
+        data_bytes = write_raw(data);
+    }
+
+    let mut data_len = pack(&(data_bytes.len() as u32));
     bytes.append(&mut data_len);
-    bytes.append(&mut data_bytes);
+
+    if !data_bytes.is_empty() { // some packets don't have data, as we can see by Option argument.
+        bytes.append(&mut data_bytes);
+    }
 
     return bytes;
 }
 
+#[inline(always)]
+pub fn write_vec<T: Serialize>(packet: Packets, _data: Vec<T>) -> Vec<u8> {
+    let mut bytes: Vec<u8>;
+
+    bytes.append(&mut pack(&(packet as i16)));
+    bytes.push(0);
+
+    for data_elem in _data {
+        bytes.append(&mut write_raw(data_elem));
+    }
+
+    let mut data_len = pack(&(bytes.len() as u32));
+    bytes.append(&mut data_len);
+    bytes.append(&mut bytes);
+
+    return bytes;
+}
+
+#[inline(always)]
 pub fn write_uleb128(_value: i32) -> Vec<u8> {
     let mut bytes: Vec<u8> = Vec::new();
     let mut value = _value;
@@ -59,6 +93,7 @@ pub fn write_uleb128(_value: i32) -> Vec<u8> {
     return bytes;
 }
 
+#[inline(always)]
 pub fn write_osu_string(_value: String) -> Vec<u8> {
     let mut bytes: Vec<u8> = Vec::new();
     let mut value = _value.as_bytes().to_vec();
@@ -72,4 +107,134 @@ pub fn write_osu_string(_value: String) -> Vec<u8> {
     }
 
     return bytes;
+}
+
+// writer will be good enough to handle lists one day.
+
+#[inline(always)]
+pub fn user_presence(user: &structs::User) -> Vec<u8> {
+    let mut packet_vec = Vec::new();
+
+    // manual construction :(
+    packet_vec.append(
+        &mut pack(&(Packets::CHO_USER_PRESENCE as i16))
+    );
+    packet_vec.push(0);
+
+    // overall data is added here
+    let mut data_vec: Vec<u8>;
+
+    data_vec.append(
+        &mut write_raw(&user.id)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.username)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.utc_offset + 24)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.country)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.bancho_priv | (user.current_mode << 5 ))
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.long)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.lat)
+    );
+
+    data_vec.append(
+        &mut write_raw(0 as i32) // user rank (hardcode for now)
+    );
+
+    // get overall data length + add it to total packet
+    let mut data_len = pack(&(data_vec.len() as u32));
+    packet_vec.append(&mut data_len);
+    packet_vec.append(&mut data_vec);
+
+    return packet_vec;
+}
+
+#[inline(always)]
+pub fn user_stats(user: &structs::User) -> Vec<u8> {
+    let mut packet_vec = Vec::new();
+
+    // manual construction :(
+    packet_vec.append(
+        &mut pack(&(Packets::CHO_USER_STATS as i16))
+    );
+    packet_vec.push(0);
+
+    // overall data is added here
+    let mut data_vec: Vec<u8>;
+
+    data_vec.append(
+        &mut write_raw(&user.id)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.action)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.info_text)
+    );
+    
+    data_vec.append(
+        &mut write_raw(&user.map_md5)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.mods)
+    );
+    
+    data_vec.append(
+        &mut write_raw(&user.current_mode)
+    );
+
+    data_vec.append(
+        &mut write_raw(&user.map_id)
+    );
+
+    // hardcoded stats for now!
+
+    data_vec.append(
+        &mut write_raw(0 as i64) // ranked score
+    );
+
+    data_vec.append(
+        &mut write_raw(0.0 as f32) // accuracy
+    );
+
+    data_vec.append(
+        &mut write_raw(0 as i32) // playcount
+    );
+    
+    data_vec.append(
+        &mut write_raw(0 as i64) // total score
+    );
+
+    data_vec.append(
+        &mut write_raw(0 as i32) // global rank
+    );
+    
+    data_vec.append(
+        &mut write_raw(0 as i16) // pp
+    );
+
+    // get overall data length + add it to total packet
+    let mut data_len = pack(&(data_vec.len() as u32));
+    packet_vec.append(&mut data_len);
+    packet_vec.append(&mut data_vec);
+
+    return packet_vec;
 }
