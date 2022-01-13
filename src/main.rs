@@ -134,7 +134,7 @@ async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpRespo
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
-    let pool = MySqlPoolOptions::new().connect("mysql://gulag:a6t5PLM3wc4wksdQ@localhost/rosu").await.unwrap();
+    let pool = MySqlPoolOptions::new().connect("").await.unwrap();
 
     web::server(move || {
         App::new()
