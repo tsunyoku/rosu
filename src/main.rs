@@ -53,7 +53,12 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     let private_dms = client_info[4] == "1";
 
     let token = Uuid::new_v4();
-    let user = User::from_sql(&username, token, osu_ver, pool).await;
+    let user_result = User::from_sql(&username, token, osu_ver, pool).await;
+
+    if user_result == None {
+        return ("no".to_string(), handlers::user_id(-1));
+    }
+    let user = user_result.unwrap();
 
     // verify password, using web::block to avoid blocking the thread
     let second_user = user.clone();

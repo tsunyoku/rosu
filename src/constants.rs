@@ -124,12 +124,3 @@ impl Serialize for Packets {
         serializer.serialize_i16(*self as i16)
     }
 }
-
-impl Serialize for Action {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u8(*self as u8)
-    }
-}

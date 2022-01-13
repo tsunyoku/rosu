@@ -69,57 +69,67 @@ pub_struct!(User {
 type DBPool = web::types::Data<Pool<MySql>>;
 
 impl User { // perhaps the worst part of this entire code rn
-    pub async fn from_sql(username: &str, token: Uuid, osu_ver: &str, pool: DBPool) -> Self {
-        let user_row = sqlx::query!("select * from users where username_safe = ?", username.to_lowercase().replace(" ", "_"))
-                .fetch_one(&**pool).await.unwrap();
+    pub async fn from_sql(username: &str, token: Uuid, osu_ver: &str, pool: DBPool) -> Option<Self> {
+        let user_row_result = sqlx::query!("select * from users where username_safe = ?", username.to_lowercase().replace(" ", "_"))
+                .fetch_one(&**pool).await;
 
-        return Self {
-            id: user_row.id,
-            osuver: osu_ver.to_string(),
-            username: user_row.username,
-            username_safe: user_row.username_safe,
-            ban_datetime: user_row.ban_datetime.parse::<i32>().unwrap(),
-            password_md5: user_row.password_md5,
-            salt: user_row.salt,
-            email: user_row.email,
-            register_datetime: user_row.register_datetime,
-            rank: user_row.rank,
-            allowed: user_row.allowed,
-            latest_activity: user_row.latest_activity,
-            silence_end: user_row.silence_end,
-            silence_reason: user_row.silence_reason,
-            password_version: user_row.password_version,
-            privileges: Privileges::from_value(user_row.privileges),
-            donor_expire: user_row.donor_expire,
-            flags: user_row.flags,
-            achievements_version: user_row.achievements_version,
-            achievements_0: user_row.achievements_0,
-            achievements_1: user_row.achievements_1,
-            notes: user_row.notes.unwrap(),
+        match user_row_result {
+            Some(user_row) => {
+                return Self {
+                    id: user_row.id,
+                    osuver: osu_ver.to_string(),
+                    username: user_row.username,
+                    username_safe: user_row.username_safe,
+                    ban_datetime: user_row.ban_datetime.parse::<i32>().unwrap_or(0_i32),
+                    password_md5: user_row.password_md5,
+                    salt: user_row.salt,
+                    email: user_row.email,
+                    register_datetime: user_row.register_datetime,
+                    rank: user_row.rank,
+                    allowed: user_row.allowed,
+                    latest_activity: user_row.latest_activity,
+                    silence_end: user_row.silence_end,
+                    silence_reason: user_row.silence_reason,
+                    password_version: user_row.password_version,
+                    privileges: Privileges::from_value(user_row.privileges),
+                    donor_expire: user_row.donor_expire,
+                    flags: user_row.flags,
+                    achievements_version: user_row.achievements_version,
+                    achievements_0: user_row.achievements_0,
+                    achievements_1: user_row.achievements_1,
+                    notes: user_row.notes.unwrap(),
+        
+                    frozen: user_row.frozen,
+                    freezedate: user_row.freezedate,
+                    firstloginafterfrozen: user_row.firstloginafterfrozen,
+        
+                    bypass_hwid: user_row.bypass_hwid,
+                    ban_reason: user_row.ban_reason,
+        
+                    utc_offset: 0,
+                    country: "XX".to_string(),
+                    geoloc: 0,
+                    bancho_priv: BanchoPrivileges::PLAYER,
+                    long: 0.0,
+                    lat: 0.0,
+        
+                    action: Action::Unknown,
+                    info_text: "".to_string(),
+                    map_md5: "".to_string(),
+                    mods: Mods::NOMOD,
+                    current_mode: Mode::std,
+                    map_id: 0,
+        
+                    token: token.to_string(),
+                }
+            }
 
-            frozen: user_row.frozen,
-            freezedate: user_row.freezedate,
-            firstloginafterfrozen: user_row.firstloginafterfrozen,
-
-            bypass_hwid: user_row.bypass_hwid,
-            ban_reason: user_row.ban_reason,
-
-            utc_offset: 0,
-            country: "XX".to_string(),
-            geoloc: 0,
-            bancho_priv: BanchoPrivileges::PLAYER,
-            long: 0.0,
-            lat: 0.0,
-
-            action: Action::Unknown,
-            info_text: "".to_string(),
-            map_md5: "".to_string(),
-            mods: Mods::NOMOD,
-            current_mode: Mode::std,
-            map_id: 0,
-
-            token: token.to_string(),
+            None => {
+                return None;
+            }
         }
+
+        
     }
 }
 
@@ -142,4 +152,13 @@ pub enum Action {
     Lobby = 11,
     Multiplaying = 12,
     OsuDirect = 13,
+}
+
+impl Serialize for Action {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
