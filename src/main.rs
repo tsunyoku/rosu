@@ -10,8 +10,8 @@ use ntex::util::Bytes;
 use bcrypt;
 use uuid::Uuid;
 
-use crate::packets::packets::Packets;
-use crate::packets::writer;
+use crate::packets::handlers;
+use crate::structs::User;
 
 type DBPool = web::types::Data<Pool<MySql>>;
 
@@ -57,26 +57,15 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     let row = match row {
         Ok(r) => r,
         Err(error) => {
-            return_data.append(
-                &mut writer::write(
-                    Packets::CHO_USER_ID,
-                    -1
-                )
-            );
-
-            return_data.append(
-                &mut writer::write(
-                    Packets::CHO_NOTIFICATION,
-                    "Unknown username"
-                )
-            );
+            return_data.extend(handlers::user_id(-1));
+            return_data.extend(handlers::notification("Unknown username"));
 
             return ("no".to_string(), return_data);
         },
     };
 
     let token = Uuid::new_v4();
-    let user = structs::User {
+    let user = User {
         id: row.id,
         osuver: osu_ver.to_string(),
         username: row.username,
@@ -129,91 +118,33 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     let valid_password = web::block(move || bcrypt::verify(password, &second_user.password_md5)).await.unwrap();
 
     if !valid_password {
-        return_data.append(
-            &mut writer::write(
-                Packets::CHO_USER_ID,
-                -1
-            )
-        );
-
-        return_data.append(
-            &mut writer::write(
-                Packets::CHO_NOTIFICATION,
-                "Incorrect password"
-            )
-        );
+        return_data.extend(handlers::user_id(-1));
+        return_data.extend(handlers::notification("Incorrect password"));
 
         return ("no".to_string(), return_data);
     }
 
     // TODO: hardware checks, clan
 
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_PROTOCOL_VERSION, 
-            19
-        )
-    );
+    return_data.extend(handlers::protocol_version(19));
+    return_data.extend(handlers::user_id(user.id));
+    return_data.extend(handlers::bancho_privileges(16));
 
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_USER_ID,
-            user.id
-        )
-    );
-
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_PRIVILEGES,
-            16
-        )
-    );
-
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_NOTIFICATION, 
+    return_data.extend(
+        handlers::notification(
             format!("Welcome to ROsu!\nTime Elapsed: {:.2?}", start.elapsed()).as_str()
         )
     );
 
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_CHANNEL_INFO_END, 
-            None::<()>
-        )
-    );
+    return_data.extend(handlers::channel_info_end());
+    return_data.extend(handlers::main_menu_icon("", "")); // empty icon & url for now
+    return_data.extend(handlers::friends_list(&user));
+    return_data.extend(handlers::silence_end(0));
 
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_MAIN_MENU_ICON,
-            "|" // icon | link (empty for now)
-        )
-    );
+    return_data.extend(handlers::user_presence(&user));
+    return_data.extend(handlers::user_stats(&user));
 
-    let mut friends_list: Vec<i32> = Vec::new(); // fake for now
-    friends_list.push(user.id);
-
-    let friends_packet = &mut writer::write(
-        Packets::CHO_FRIENDS_LIST,
-        &friends_list
-    );
-
-    return_data.append(
-        friends_packet
-    );
-
-    return_data.append(
-        &mut writer::write(
-            Packets::CHO_SILENCE_END,
-            0
-        )
-    );
-
-    return_data.append(&mut writer::user_presence(&user));
-    return_data.append(&mut writer::user_stats(&user));
-
-    println!("{} logged in", &username);
-
+    println!("{} has logged in!", &username);
     return (token.to_string(), return_data);
 }
 
@@ -261,7 +192,7 @@ async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpRespo
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
-    let pool = MySqlPoolOptions::new().connect("mysql://gulag:a6t5PLM3wc4wksdQ@localhost/rosu").await.unwrap();
+    let pool = MySqlPoolOptions::new().connect("").await.unwrap();
 
     web::server(move || {
         App::new()

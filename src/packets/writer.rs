@@ -2,12 +2,12 @@ extern crate alloc;
 
 use byteorder::LittleEndian;
 use alloc::string::String;
+use std::ops::{Add, AddAssign};
 use alloc::vec::Vec;
 use bincode::Infinite;
 use serde::Serialize;
 
-use crate::packets::packets::Packets;
-use crate::structs;
+use crate::structs::Packets;
 
 #[inline(always)]
 pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {
@@ -17,7 +17,7 @@ pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {
 #[inline(always)]
 pub fn write_raw<T: Serialize>(data: T) -> Vec<u8> {
     let mut data_bytes: Vec<u8> = Vec::new();
-    
+
     if std::any::type_name::<T>() == "&alloc::string::String" {
         let packet_string = unsafe {
             std::mem::transmute_copy::<T, &alloc::string::String>(&data)
@@ -35,40 +35,15 @@ pub fn write_raw<T: Serialize>(data: T) -> Vec<u8> {
             std::mem::transmute_copy::<T, &alloc::vec::Vec<i32>>(&data)
         };
 
-        data_bytes.append(&mut pack(&(int_list.len() as u16)));
+        data_bytes.extend(pack(&(int_list.len() as u16)));
         for data_elem in int_list {
-            data_bytes.append(&mut write_raw(data_elem));
+            data_bytes.extend(write_raw(data_elem));
         }
-    } else {
+    } else if std::any::type_name::<T>() != "core::option::Option<()>" {
         data_bytes = pack(&data);
     }
 
     return data_bytes;
-}
-
-#[inline(always)]
-pub fn write<T: Into<Option<T>> + Serialize>(packet: Packets, _data: T) -> Vec<u8>{
-    let mut bytes = Vec::new();
-
-    bytes.append(&mut pack(&(packet as i16)));
-    bytes.push(0);
-
-    let mut data_bytes: Vec<u8> = Vec::new();
-
-    if std::any::type_name::<T>() != "core::option::Option<()>" {
-        if let Some(data) = _data.into() {
-            data_bytes = write_raw(data);
-        }
-    }
-
-    let mut data_len = pack(&(data_bytes.len() as u32));
-    bytes.append(&mut data_len);
-
-    if !data_bytes.is_empty() { // some packets don't have data, as we can see by Option argument.
-        bytes.append(&mut data_bytes);
-    }
-
-    return bytes;
 }
 
 #[inline(always)]
@@ -93,145 +68,160 @@ pub fn write_uleb128(_value: i32) -> Vec<u8> {
 #[inline(always)]
 pub fn write_osu_string(_value: String) -> Vec<u8> {
     let mut bytes: Vec<u8> = Vec::new();
-    let mut value = _value.as_bytes().to_vec();
+    let value = _value.as_bytes().to_vec();
 
     if value.is_empty() {
         bytes.push(0);
     } else {
         bytes.push(11); // 0x0B
-        bytes.append(&mut write_uleb128(value.len() as i32));
-        bytes.append(&mut value);
+        bytes.extend(write_uleb128(value.len() as i32));
+        bytes.extend(value);
     }
 
     return bytes;
 }
 
-// writer will be good enough to handle lists one day.
-
-#[inline(always)]
-pub fn user_presence(user: &structs::User) -> Vec<u8> {
-    let mut packet_vec = Vec::new();
-
-    // manual construction :(
-    packet_vec.append(
-        &mut pack(&(Packets::CHO_USER_PRESENCE as i16))
-    );
-    packet_vec.push(0);
-
-    // overall data is added here
-    let mut data_vec: Vec<u8> = Vec::new();
-
-    data_vec.append(
-        &mut write_raw(&user.id)
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.username)
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.utc_offset + 24)
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.geoloc)
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.bancho_priv | (user.current_mode << 5 ))
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.long)
-    );
-
-    data_vec.append(
-        &mut write_raw(&user.lat)
-    );
-
-    data_vec.append(
-        &mut write_raw(0 as i32) // user rank (hardcode for now)
-    );
-
-    // get overall data length + add it to total packet
-    let mut data_len = pack(&(data_vec.len() as u32));
-    packet_vec.append(&mut data_len);
-    packet_vec.append(&mut data_vec);
-
-    return packet_vec;
+#[derive(Clone, Debug, PartialEq)]
+pub struct PacketWriter {
+    packet: Packets,
+    data: Vec<u8> // we barely actually need any attributes, we just like the functions.
 }
 
-#[inline(always)]
-pub fn user_stats(user: &structs::User) -> Vec<u8> {
-    let mut packet_vec: Vec<u8> = Vec::new();
+impl PacketWriter {
+    pub fn new(packet: Packets) -> Self {
+        return Self {
+            packet: packet,
+            data: Vec::new()
+        }
+    }
 
-    // manual construction :(
-    packet_vec.append(
-        &mut pack(&(Packets::CHO_USER_STATS as i16))
-    );
-    packet_vec.push(0);
+    pub fn write<T: Serialize>(&mut self, packet_data: T) {
+        self.data.extend(write_raw(packet_data));
+    }
 
-    // overall data is added here
-    let mut data_vec: Vec<u8> = Vec::new();
+    #[inline(always)]
+    pub fn serialize(&mut self) -> Vec<u8> {
+        let mut return_data: Vec<u8> = Vec::new();
 
-    data_vec.append(
-        &mut write_raw(&user.id)
-    );
+        // first add packet id
+        return_data.extend(write_raw(self.packet));
 
-    data_vec.append(
-        &mut write_raw(user.action as u8)
-    );
+        return_data.push(0); // just osu things.
 
-    data_vec.append(
-        &mut write_raw(&user.info_text)
-    );
-    
-    data_vec.append(
-        &mut write_raw(&user.map_md5)
-    );
+        // now calculate our data length, and follow regular packet structure.
+        let data_len = pack(&(self.data.len() as u32));
+        return_data.extend(data_len);
+        return_data.append(&mut self.data);
 
-    data_vec.append(
-        &mut write_raw(&user.mods)
-    );
-    
-    data_vec.append(
-        &mut write_raw(&user.current_mode)
-    );
+        return return_data;
+    }
+}
 
-    data_vec.append(
-        &mut write_raw(&user.map_id)
-    );
+macro_rules! packet_impl {
+    ($name: ident) => {
+        impl Add<$name> for PacketWriter {
+            type Output = PacketWriter;
 
-    // hardcoded stats for now!
+            fn add(mut self, data: $name) -> PacketWriter {
+                self.write(data);
 
-    data_vec.append(
-        &mut write_raw(0 as i64) // ranked score
-    );
+                return self;
+            }
+        }
 
-    data_vec.append(
-        &mut write_raw(0.0 as f32) // accuracy
-    );
+        impl AddAssign<$name> for PacketWriter {
+            fn add_assign(&mut self, data: $name) {
+                self.write(data);
+            }
+        }
+    }
+}
 
-    data_vec.append(
-        &mut write_raw(0 as i32) // playcount
-    );
-    
-    data_vec.append(
-        &mut write_raw(0 as i64) // total score
-    );
+packet_impl!(u8);
+packet_impl!(i16);
+packet_impl!(i32);
+packet_impl!(f32);
+packet_impl!(i64);
+packet_impl!(String);
 
-    data_vec.append(
-        &mut write_raw(0 as i32) // global rank
-    );
-    
-    data_vec.append(
-        &mut write_raw(0 as i16) // pp
-    );
+// these ones couldn't be handled by macro :(
 
-    // get overall data length + add it to total packet
-    let mut data_len = pack(&(data_vec.len() as u32));
-    packet_vec.append(&mut data_len);
-    packet_vec.append(&mut data_vec);
+impl Add<Vec<u8>> for PacketWriter {
+    type Output = PacketWriter;
 
-    return packet_vec;
+    fn add(mut self, data: Vec<u8>) -> PacketWriter {
+        self.data.extend(data);
+
+        return self;
+    }
+}
+
+impl AddAssign<Vec<u8>> for PacketWriter {
+    fn add_assign(&mut self, data: Vec<u8>) {
+        self.data.extend(data);
+    }
+}
+
+impl Add<&Vec<i32>> for PacketWriter {
+    type Output = PacketWriter;
+
+    fn add(mut self, data: &Vec<i32>) -> PacketWriter {
+        self.write(data);
+
+        return self;
+    }
+}
+
+impl AddAssign<&Vec<i32>> for PacketWriter {
+    fn add_assign(&mut self, data: &Vec<i32>) {
+        self.write(data);
+    }
+}
+
+impl Add<&str> for PacketWriter {
+       type Output = PacketWriter;
+
+    fn add(mut self, data: &str) -> PacketWriter {
+        self.write(data);
+
+        return self;
+    }
+}
+
+impl AddAssign<&str> for PacketWriter {
+    fn add_assign(&mut self, data: &str) {
+        self.write(data);
+    }
+}
+
+impl Add<&String> for PacketWriter {
+    type Output = PacketWriter;
+
+    fn add(mut self, data: &String) -> PacketWriter {
+        self.write(data);
+
+        return self;
+    }
+}
+
+impl AddAssign<&String> for PacketWriter {
+    fn add_assign(&mut self, data: &String) {
+        self.write(data);
+    }
+}
+
+impl Add<PacketWriter> for PacketWriter {
+    type Output = PacketWriter;
+
+    fn add(mut self, writer: PacketWriter) -> PacketWriter {
+        self += writer.data;
+
+        return self;
+    }
+}
+
+impl AddAssign<PacketWriter> for PacketWriter {
+    fn add_assign(&mut self, writer: PacketWriter) {
+        self.data.extend(writer.data);
+    }
 }
