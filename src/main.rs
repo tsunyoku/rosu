@@ -1,5 +1,6 @@
 mod packets;
-mod structs;
+mod constants;
+mod objects;
 
 use ntex::web::{self, middleware, App, HttpRequest, HttpResponse};
 use sqlx::mysql::MySqlPoolOptions;
@@ -11,7 +12,7 @@ use bcrypt;
 use uuid::Uuid;
 
 use crate::packets::handlers;
-use crate::structs::User;
+use crate::objects::user::User;
 
 type DBPool = web::types::Data<Pool<MySql>>;
 
@@ -51,67 +52,8 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
 
     let private_dms = client_info[4] == "1";
 
-    let row = sqlx::query!("select * from users where username_safe = ?", username.to_lowercase().replace(" ", "_"))
-                .fetch_one(&**pool).await;
-
-    let row = match row {
-        Ok(r) => r,
-        Err(error) => {
-            return_data.extend(handlers::user_id(-1));
-            return_data.extend(handlers::notification("Unknown username"));
-
-            return ("no".to_string(), return_data);
-        },
-    };
-
     let token = Uuid::new_v4();
-    let user = User {
-        id: row.id,
-        osuver: osu_ver.to_string(),
-        username: row.username,
-        username_safe: row.username_safe,
-        ban_datetime: row.ban_datetime.parse::<i32>().unwrap(),
-        password_md5: row.password_md5,
-        salt: row.salt,
-        email: row.email,
-        register_datetime: row.register_datetime,
-        rank: row.rank,
-        allowed: row.allowed,
-        latest_activity: row.latest_activity,
-        silence_end: row.silence_end,
-        silence_reason: row.silence_reason,
-        password_version: row.password_version,
-        privileges: row.privileges,
-        donor_expire: row.donor_expire,
-        flags: row.flags,
-        achievements_version: row.achievements_version,
-        achievements_0: row.achievements_0,
-        achievements_1: row.achievements_1,
-        notes: row.notes.unwrap(),
-
-        frozen: row.frozen,
-        freezedate: row.freezedate,
-        firstloginafterfrozen: row.firstloginafterfrozen,
-
-        bypass_hwid: row.bypass_hwid,
-        ban_reason: row.ban_reason,
-
-        utc_offset: 0,
-        country: "XX".to_string(),
-        geoloc: 0,
-        bancho_priv: 0,
-        long: 0.0,
-        lat: 0.0,
-
-        action: structs::Action::Unknown,
-        info_text: "".to_string(),
-        map_md5: "".to_string(),
-        mods: 0,
-        current_mode: 0,
-        map_id: 0,
-
-        token: token.to_string(),
-    };
+    let user = User::from_sql(&username, token, osu_ver, pool).await;
 
     // verify password, using web::block to avoid blocking the thread
     let second_user = user.clone();
@@ -192,7 +134,7 @@ async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpRespo
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
-    let pool = MySqlPoolOptions::new().connect("").await.unwrap();
+    let pool = MySqlPoolOptions::new().connect("mysql://gulag:a6t5PLM3wc4wksdQ@localhost/rosu").await.unwrap();
 
     web::server(move || {
         App::new()

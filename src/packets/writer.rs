@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use bincode::Infinite;
 use serde::Serialize;
 
-use crate::structs::Packets;
+use crate::constants::Packets;
 
 #[inline(always)]
 pub fn pack<T: Serialize>(data: &T) -> Vec<u8> {

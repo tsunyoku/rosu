@@ -1,4 +1,5 @@
-use crate::structs::{User, Packets};
+use crate::constants::Packets;
+use crate::objects::user::User;
 use crate::packets::writer::PacketWriter;
 
 #[inline(always)]
@@ -68,7 +69,7 @@ pub fn user_presence(user: &User) -> Vec<u8> {
     writer += &user.username;
     writer += user.utc_offset + 24;
     writer += user.geoloc;
-    writer += user.bancho_priv | (user.current_mode << 5);
+    writer += user.bancho_priv.bits() as u8 | ((user.current_mode as u8) << 5);
     writer += user.long;
     writer += user.lat;
     writer += 0 as i32; // user rank (hardcode for now)
@@ -84,8 +85,8 @@ pub fn user_stats(user: &User) -> Vec<u8> {
     writer += user.action as u8;
     writer += &user.info_text;
     writer += &user.map_md5;
-    writer += user.mods;
-    writer += user.current_mode;
+    writer += user.mods.bits() as i32;
+    writer += user.current_mode as u8;
     writer += user.map_id;
 
     // hardcoded stats for now!
