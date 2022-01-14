@@ -1,5 +1,4 @@
 use serde::{Serialize, Serializer};
-use crate::objects::user::Action;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types)]

@@ -1,10 +1,11 @@
 use crate::objects::mode::Mode;
 use crate::objects::mods::Mods;
-use crate::objects::privileges::{Privileges, BanchoPrivileges};
+use crate::objects::privileges::{BanchoPrivileges, Privileges};
 use uuid::Uuid;
 
 use ntex::web;
-use sqlx::{Pool, MySql};
+use serde::{Serialize, Serializer};
+use sqlx::{MySql, Pool};
 
 macro_rules! pub_struct { // w.
     ($name:ident {$($field:ident: $t:ty,)*}) => {
@@ -35,8 +36,8 @@ pub_struct!(User {
     donor_expire: i32,
     flags: i32,
     achievements_version: i32, // unused
-    achievements_0: i32, // unused?
-    achievements_1: i32, // unused?
+    achievements_0: i32,       // unused?
+    achievements_1: i32,       // unused?
     notes: String,
 
     // wow i hate my old self for making freeze like this lol
@@ -68,10 +69,20 @@ pub_struct!(User {
 
 type DBPool = web::types::Data<Pool<MySql>>;
 
-impl User { // perhaps the worst part of this entire code rn
-    pub async fn from_sql(username: &str, token: Uuid, osu_ver: &str, pool: DBPool) -> Option<Self> {
-        let user_row_result = sqlx::query!("select * from users where username_safe = ?", username.to_lowercase().replace(" ", "_"))
-                .fetch_one(&**pool).await;
+impl User {
+    // perhaps the worst part of this entire code rn
+    pub async fn from_sql(
+        username: &str,
+        token: Uuid,
+        osu_ver: &str,
+        pool: DBPool,
+    ) -> Option<Self> {
+        let user_row_result = sqlx::query!(
+            "select * from users where username_safe = ?",
+            username.to_lowercase().replace(" ", "_")
+        )
+        .fetch_one(&**pool)
+        .await;
 
         match user_row_result {
             Some(user_row) => {
@@ -98,28 +109,23 @@ impl User { // perhaps the worst part of this entire code rn
                     achievements_0: user_row.achievements_0,
                     achievements_1: user_row.achievements_1,
                     notes: user_row.notes.unwrap(),
-        
                     frozen: user_row.frozen,
                     freezedate: user_row.freezedate,
                     firstloginafterfrozen: user_row.firstloginafterfrozen,
-        
                     bypass_hwid: user_row.bypass_hwid,
                     ban_reason: user_row.ban_reason,
-        
                     utc_offset: 0,
                     country: "XX".to_string(),
                     geoloc: 0,
                     bancho_priv: BanchoPrivileges::PLAYER,
                     long: 0.0,
                     lat: 0.0,
-        
                     action: Action::Unknown,
                     info_text: "".to_string(),
                     map_md5: "".to_string(),
                     mods: Mods::NOMOD,
                     current_mode: Mode::std,
                     map_id: 0,
-        
                     token: token.to_string(),
                 }
             }
@@ -128,8 +134,6 @@ impl User { // perhaps the worst part of this entire code rn
                 return None;
             }
         }
-
-        
     }
 }
 
