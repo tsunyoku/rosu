@@ -1,6 +1,10 @@
+use ntex::web;
 use num_enum::TryFromPrimitive;
+use sqlx::{MySql, Pool};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, TryFromPrimitive)]
+use strum_macros::EnumIter;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, TryFromPrimitive, EnumIter)]
 #[allow(non_camel_case_types)]
 #[allow(dead_code)]
 #[repr(i32)]
@@ -48,6 +52,18 @@ impl Mode {
         }
     }
 
+    fn sql_suffix(self) -> &'static str {
+        if STD_MODES.contains(&self) {
+            return "std";
+        } else if TAIKO_MODES.contains(&self) {
+            return "taiko";
+        } else if CATCH_MODES.contains(&self) {
+            return "ctb";
+        } else {
+            return "mania";
+        }
+    }
+
     fn from_mods(mode: i32, mods: i32) -> Self {
         if mods & 128 > 0 {
             // 128 = relax
@@ -66,5 +82,37 @@ impl Mode {
         }
 
         return unsafe { std::mem::transmute(mode) };
+    }
+}
+
+#[derive(sqlx::FromRow)]
+pub struct Stats {
+    pub total_score: i32,
+    pub ranked_score: i32,
+    pub accuracy: f32,
+    pub playcount: i32,
+    pub pp: i32,
+    // TODO: rank
+}
+
+type DBPool = web::types::Data<Pool<MySql>>;
+
+impl Stats {
+    pub async fn for_mode(mode: Mode, user_id: i32, pool: &DBPool) -> Self {
+        let query: String = format!(
+            "select total_score_{suffix} as total_score, ranked_score_{suffix} as ranked_score, 
+            avg_accuracy_{suffix} as accuracy, playcount_{suffix} as playcount, pp_{suffix} as pp 
+            from {table} where id = ?",
+            suffix = mode.sql_suffix(),
+            table = mode.stats_table(),
+        );
+
+        let mode = sqlx::query_as::<_, Self>(&query)
+            .bind(user_id)
+            .fetch_one(&***pool)
+            .await
+            .unwrap();
+
+        return mode;
     }
 }

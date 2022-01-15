@@ -89,13 +89,14 @@ pub fn user_stats(user: &User) -> Vec<u8> {
     writer += user.current_mode as u8;
     writer += user.map_id;
 
-    // hardcoded stats for now!
-    writer += 0 as i64; // ranked score
-    writer += 0.0 as f32; // accuracy
-    writer += 0 as i32; // playcount
-    writer += 0 as i64; // total score
+    let stats = &user.stats[user.current_mode as usize];
+
+    writer += stats.ranked_score as i64; // ranked score
+    writer += stats.accuracy / 100.0 as f32; // accuracy
+    writer += stats.playcount as i32; // playcount
+    writer += stats.total_score as i64; // total score
     writer += 0 as i32; // global rank
-    writer += 0 as i16; // pp
+    writer += stats.pp as i16; // pp
 
     return writer.serialize();
 }

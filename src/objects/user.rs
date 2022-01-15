@@ -1,5 +1,5 @@
 use crate::constants::CountryCodes;
-use crate::objects::mode::Mode;
+use crate::objects::mode::{Mode, Stats};
 use crate::objects::mods::Mods;
 use crate::objects::privileges::{BanchoPrivileges, Privileges};
 use uuid::Uuid;
@@ -8,6 +8,8 @@ use ntex::web;
 use serde::{Serialize, Serializer};
 use sqlx::{MySql, Pool};
 use std::str::FromStr;
+
+use strum::IntoEnumIterator;
 
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
@@ -97,6 +99,8 @@ pub_struct!(User {
 
     token: String,      // rando token
     queue: PacketQueue, // for sending packets to the user
+
+    stats: Vec<Stats>,
 });
 
 type DBPool = web::types::Data<Pool<MySql>>;
@@ -128,6 +132,11 @@ impl User {
 
                 let geoloc = CountryCodes::from_str(&country.to_uppercase())
                     .unwrap_or(CountryCodes::XX) as u8;
+
+                let mut stats_vec: Vec<Stats> = Vec::new();
+                for mode in Mode::iter() {
+                    stats_vec.push(Stats::for_mode(mode, user_row.id, &pool).await);
+                }
 
                 return Some(Self {
                     id: user_row.id,
@@ -171,6 +180,7 @@ impl User {
                     map_id: 0,
                     token: token.to_string(),
                     queue: PacketQueue::new(),
+                    stats: stats_vec,
                 });
             }
             _ => return None,
