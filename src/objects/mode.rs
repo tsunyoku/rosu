@@ -24,8 +24,8 @@ const CATCH_MODES: &[Mode; 2] = &[Mode::catch, Mode::catch_rx];
 const RELAX_MODES: &[Mode; 3] = &[Mode::std_rx, Mode::taiko_rx, Mode::catch_rx];
 const VANILLA_MODES: &[Mode; 4] = &[Mode::std, Mode::taiko, Mode::catch, Mode::mania];
 
+#[allow(dead_code)]
 impl Mode {
-    #[allow(dead_code)]
     fn table(&self) -> &'static str {
         if RELAX_MODES.contains(self) {
             return "scores_relax";
@@ -36,7 +36,6 @@ impl Mode {
         }
     }
 
-    #[allow(dead_code)]
     fn as_vn(self) -> i32 {
         if STD_MODES.contains(&self) {
             return 0;
@@ -49,7 +48,6 @@ impl Mode {
         }
     }
 
-    #[allow(dead_code)]
     fn sort(self) -> &'static str {
         if (self as i32) > 3 {
             return "pp";
@@ -58,15 +56,16 @@ impl Mode {
         }
     }
 
-    #[allow(dead_code)]
     fn from_mods(mode: i32, mods: i32) -> Self {
-        if mods & 128 > 0 { // 128 = relax
+        if mods & 128 > 0 {
+            // 128 = relax
             if mode == 3 {
                 return Self::mania;
             }
 
             return unsafe { std::mem::transmute(mode + 4) };
-        } else if mods & 8192 > 0 { // 8192 = autopilot
+        } else if mods & 8192 > 0 {
+            // 8192 = autopilot
             if mode != 0 {
                 return unsafe { std::mem::transmute(mode) };
             }

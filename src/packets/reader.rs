@@ -5,9 +5,13 @@ pub struct Reader {
     offset: usize,
 }
 
+#[allow(dead_code)]
 impl Reader {
     pub fn new(packet: Vec<u8>) -> Self {
-        Self { buf: packet, offset: 0 }
+        Self {
+            buf: packet,
+            offset: 0,
+        }
     }
 
     fn incr_offset(&mut self, amount: usize) {

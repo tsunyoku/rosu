@@ -7,12 +7,41 @@ use ntex::web;
 use serde::{Serialize, Serializer};
 use sqlx::{MySql, Pool};
 
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
+
 macro_rules! pub_struct { // w.
     ($name:ident {$($field:ident: $t:ty,)*}) => {
-        #[derive(Clone)]
         pub struct $name {
             $(pub $field: $t),*
         }
+    }
+}
+
+#[allow(dead_code)]
+pub struct PacketQueue {
+    queue: Mutex<Vec<u8>>,
+}
+
+#[allow(dead_code)]
+impl PacketQueue {
+    pub fn new() -> Self {
+        return Self {
+            queue: Mutex::new(Vec::with_capacity(512)),
+        };
+    }
+
+    #[inline(always)]
+    pub async fn dequeue(&self) -> Vec<u8> {
+        let mut queue = self.queue.lock().await;
+        let queue_vec = queue.clone();
+
+        queue.clear();
+        return queue_vec;
+    }
+
+    pub async fn enqueue(&self, bytes: Vec<u8>) {
+        self.queue.lock().await.extend(bytes);
     }
 }
 
@@ -64,7 +93,8 @@ pub_struct!(User {
     current_mode: Mode,
     map_id: i32,
 
-    token: String, // rando token
+    token: String,      // rando token
+    queue: PacketQueue, // for sending packets to the user
 });
 
 type DBPool = web::types::Data<Pool<MySql>>;
@@ -77,16 +107,16 @@ impl User {
         osu_ver: &str,
         pool: DBPool,
     ) -> Option<Self> {
-        let user_row_result = sqlx::query!(
+        let user_row = sqlx::query!(
             "select * from users where username_safe = ?",
             username.to_lowercase().replace(" ", "_")
         )
         .fetch_one(&**pool)
         .await;
 
-        match user_row_result {
-            Some(user_row) => {
-                return Self {
+        match user_row {
+            Ok(user_row) => {
+                return Some(Self {
                     id: user_row.id,
                     osuver: osu_ver.to_string(),
                     username: user_row.username,
@@ -127,13 +157,15 @@ impl User {
                     current_mode: Mode::std,
                     map_id: 0,
                     token: token.to_string(),
-                }
+                    queue: PacketQueue::new(),
+                });
             }
+            _ => return None,
+        };
+    }
 
-            None => {
-                return None;
-            }
-        }
+    pub async fn enqueue(&self, bytes: Vec<u8>) {
+        self.queue.enqueue(bytes).await;
     }
 }
 
@@ -164,5 +196,43 @@ impl Serialize for Action {
         S: Serializer,
     {
         serializer.serialize_u8(*self as u8)
+    }
+}
+
+pub struct PlayerList {
+    players: Mutex<HashMap<i32, Arc<RwLock<User>>>>,
+}
+
+#[allow(dead_code)]
+impl PlayerList {
+    pub fn new() -> Self {
+        return Self {
+            players: Mutex::new(HashMap::new()),
+        };
+    }
+
+    pub async fn add_player(&self, player: User) {
+        let user_id = player.id.clone();
+
+        let player_arc = Arc::from(RwLock::from(player));
+        self.players.lock().await.insert(user_id, player_arc);
+    }
+
+    pub async fn enqueue(&self, bytes: Vec<u8>) {
+        for player in self.players.lock().await.values() {
+            let user = player.read().await;
+            user.enqueue(bytes.clone()).await;
+        }
+    }
+
+    pub async fn get(&self, user_id: i32) -> Option<Arc<RwLock<User>>> {
+        match self.players.lock().await.get(&user_id) {
+            Some(u) => Some(u.clone()),
+            _ => None,
+        }
+    }
+
+    pub async fn remove(&mut self, user_id: i32) {
+        self.players.lock().await.remove(&user_id);
     }
 }

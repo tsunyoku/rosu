@@ -28,6 +28,7 @@ bitflags! {
     }
 }
 
+#[allow(dead_code)]
 impl Privileges {
     pub fn from_value(value: i64) -> Self {
         return Self { bits: value };
