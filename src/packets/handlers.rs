@@ -31,7 +31,8 @@ pub fn bancho_privileges(privs: i32) -> Vec<u8> {
 }
 
 #[inline(always)]
-pub fn channel_info_end() -> Vec<u8> { // lol this is so stupid
+pub fn channel_info_end() -> Vec<u8> {
+    // lol this is so stupid
     let mut writer = PacketWriter::new(Packets::CHO_CHANNEL_INFO_END);
     return writer.serialize();
 }
@@ -46,7 +47,6 @@ pub fn main_menu_icon(icon: &str, link: &str) -> Vec<u8> {
 #[inline(always)]
 pub fn friends_list(user: &User) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_FRIENDS_LIST);
-    
     // fake list for now
     let friends_list = vec![user.id];
     writer += &friends_list;
@@ -67,9 +67,9 @@ pub fn user_presence(user: &User) -> Vec<u8> {
 
     writer += user.id;
     writer += &user.username;
-    writer += user.utc_offset + 24;
+    writer += (user.utc_offset + 24) as u8;
     writer += user.geoloc;
-    writer += user.bancho_priv.bits() as u8 | ((user.current_mode as u8) << 5);
+    writer += user.bancho_priv.value() as u8 | ((user.current_mode as u8) << 5);
     writer += user.long;
     writer += user.lat;
     writer += 0 as i32; // user rank (hardcode for now)

@@ -1,3 +1,4 @@
+use crate::constants::CountryCodes;
 use crate::objects::mode::Mode;
 use crate::objects::mods::Mods;
 use crate::objects::privileges::{BanchoPrivileges, Privileges};
@@ -6,6 +7,7 @@ use uuid::Uuid;
 use ntex::web;
 use serde::{Serialize, Serializer};
 use sqlx::{MySql, Pool};
+use std::str::FromStr;
 
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
@@ -105,6 +107,7 @@ impl User {
         username: &str,
         token: Uuid,
         osu_ver: &str,
+        offset: i32,
         pool: DBPool,
     ) -> Option<Self> {
         let user_row = sqlx::query!(
@@ -116,6 +119,18 @@ impl User {
 
         match user_row {
             Ok(user_row) => {
+                let country =
+                    sqlx::query!("select country from users_stats where id = ?", user_row.id)
+                        .fetch_one(&**pool)
+                        .await
+                        .unwrap()
+                        .country;
+
+                let geoloc = CountryCodes::from_str(&country.to_uppercase())
+                    .unwrap_or(CountryCodes::XX) as u8;
+
+                println!("{:?}", geoloc);
+
                 return Some(Self {
                     id: user_row.id,
                     osuver: osu_ver.to_string(),
@@ -144,12 +159,12 @@ impl User {
                     firstloginafterfrozen: user_row.firstloginafterfrozen,
                     bypass_hwid: user_row.bypass_hwid,
                     ban_reason: user_row.ban_reason,
-                    utc_offset: 0,
-                    country: "XX".to_string(),
-                    geoloc: 0,
+                    utc_offset: offset,
+                    country: country,
+                    geoloc: geoloc,
                     bancho_priv: BanchoPrivileges::from_privileges(user_row.privileges),
-                    long: 0.0,
-                    lat: 0.0,
+                    long: 0.0, // set later in login
+                    lat: 0.0,  // set later in login
                     action: Action::Unknown,
                     info_text: "".to_string(),
                     map_md5: "".to_string(),

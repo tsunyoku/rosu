@@ -3,7 +3,7 @@ mod objects;
 mod packets;
 
 use bcrypt;
-use ntex::http::Method;
+use ntex::http::{HeaderMap, Method};
 use ntex::util::Bytes;
 use ntex::web::{self, middleware, App, HttpRequest, HttpResponse};
 use sqlx::mysql::MySqlPoolOptions;
@@ -11,6 +11,10 @@ use sqlx::{MySql, Pool};
 use std::env;
 use std::time::Instant;
 use uuid::Uuid;
+
+use maxminddb::{geoip2, Reader};
+use std::net::IpAddr;
+use std::str::FromStr;
 
 use crate::objects::user::{PlayerList, User};
 use crate::packets::handlers;
@@ -21,10 +25,12 @@ type DBPool = web::types::Data<Pool<MySql>>;
 
 lazy_static! {
     static ref players: PlayerList = PlayerList::new();
+    static ref reader: Reader<Vec<u8>> = Reader::open_readfile("ext/geoloc.mmdb").unwrap();
 }
 
 #[allow(unused_variables)]
-async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
+#[inline(always)]
+async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec<u8>) {
     let start = Instant::now();
 
     let mut return_data: Vec<u8> = Vec::new();
@@ -63,9 +69,9 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     let private_dms = client_info[4] == "1";
 
     let token = Uuid::new_v4();
-    let user_result = User::from_sql(&username, token, osu_ver, pool).await;
+    let user_result = User::from_sql(&username, token, osu_ver, utc_offset, pool).await;
 
-    let user = match user_result {
+    let mut user = match user_result {
         Some(user) => user,
         _ => {
             return ("no".to_string(), handlers::user_id(-1));
@@ -85,11 +91,39 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
         return ("no".to_string(), return_data);
     }
 
+    // parse geoloc
+    let ip: &str;
+
+    if headers.contains_key("CF-Connecting-IP") {
+        ip = headers.get("CF-Connecting-IP").unwrap().to_str().unwrap();
+    } else {
+        let forwards = headers // this is fucking unbelievable HAHAHA
+            .get("X-Forwarded-For")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(",")
+            .collect::<Vec<&str>>();
+
+        if forwards.len() != 1 {
+            ip = &forwards[0];
+        } else {
+            ip = headers.get("X-Real-IP").unwrap().to_str().unwrap();
+        }
+    }
+
+    let geoloc_ip: IpAddr = FromStr::from_str(ip).unwrap();
+    let city: geoip2::City = reader.lookup(geoloc_ip).unwrap();
+
+    let location = city.location.unwrap();
+    user.long = location.longitude.unwrap() as f32;
+    user.lat = location.latitude.unwrap() as f32;
+
     // TODO: hardware checks, clan
 
     return_data.extend(handlers::protocol_version(19));
     return_data.extend(handlers::user_id(user.id));
-    return_data.extend(handlers::bancho_privileges(16));
+    return_data.extend(handlers::bancho_privileges(user.bancho_priv.value()));
 
     return_data.extend(handlers::channel_info_end());
     return_data.extend(handlers::main_menu_icon("", "")); // empty icon & url for now
@@ -117,7 +151,7 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse
     let return_data: Vec<u8> = Vec::new();
 
     if !req.headers().contains_key("osu-token") {
-        let (token, login_data) = login(_data, _pool).await;
+        let (token, login_data) = login(_data, _pool, &req.headers()).await;
 
         if login_data.len() == 0 {
             // invalid request

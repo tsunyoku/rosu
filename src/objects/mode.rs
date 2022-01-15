@@ -26,13 +26,13 @@ const VANILLA_MODES: &[Mode; 4] = &[Mode::std, Mode::taiko, Mode::catch, Mode::m
 
 #[allow(dead_code)]
 impl Mode {
-    fn table(&self) -> &'static str {
+    fn stats_table(&self) -> &'static str {
         if RELAX_MODES.contains(self) {
-            return "scores_relax";
+            return "rx_stats";
         } else if VANILLA_MODES.contains(self) {
-            return "scores";
+            return "users_stats";
         } else {
-            return "scores_ap";
+            return "ap_stats";
         }
     }
 
@@ -45,14 +45,6 @@ impl Mode {
             return 2;
         } else {
             return self as i32;
-        }
-    }
-
-    fn sort(self) -> &'static str {
-        if (self as i32) > 3 {
-            return "pp";
-        } else {
-            return "score";
         }
     }
 

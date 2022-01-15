@@ -40,7 +40,7 @@ impl Privileges {
 }
 
 bitflags! {
-    pub struct BanchoPrivileges: u8 {
+    pub struct BanchoPrivileges: i32 {
         const PLAYER = 1 << 0;
         const MODERATOR = 1 << 1;
         const SUPPORTER = 1 << 2;
@@ -52,7 +52,7 @@ bitflags! {
 #[allow(dead_code)]
 impl BanchoPrivileges {
     pub fn from_value(value: i64) -> Self {
-        return Self { bits: value as u8 };
+        return Self { bits: value as i32 };
     }
 
     pub fn from_privileges(privileges: i64) -> Self {
@@ -72,7 +72,7 @@ impl BanchoPrivileges {
         return cho_priv;
     }
 
-    pub fn value(self) -> u8 {
+    pub fn value(self) -> i32 {
         return self.bits();
     }
 }
