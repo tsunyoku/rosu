@@ -91,12 +91,12 @@ pub fn user_stats(user: &User) -> Vec<u8> {
 
     let stats = &user.stats[user.current_mode as usize];
 
-    writer += stats.ranked_score as i64; // ranked score
-    writer += stats.accuracy / 100.0 as f32; // accuracy
-    writer += stats.playcount as i32; // playcount
-    writer += stats.total_score as i64; // total score
+    writer += stats.ranked_score as i64;
+    writer += stats.accuracy / 100.0 as f32;
+    writer += stats.playcount as i32;
+    writer += stats.total_score as i64;
     writer += 0 as i32; // global rank
-    writer += stats.pp as i16; // pp
+    writer += stats.pp as i16;
 
     return writer.serialize();
 }
