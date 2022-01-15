@@ -8,6 +8,7 @@ use ntex::util::Bytes;
 use ntex::web::{self, middleware, App, HttpRequest, HttpResponse};
 use sqlx::mysql::MySqlPoolOptions;
 use sqlx::{MySql, Pool};
+use std::env;
 use std::time::Instant;
 use uuid::Uuid;
 
@@ -90,10 +91,6 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     return_data.extend(handlers::user_id(user.id));
     return_data.extend(handlers::bancho_privileges(16));
 
-    return_data.extend(handlers::notification(
-        format!("Welcome to ROsu!\nTime Elapsed: {:.2?}", start.elapsed()).as_str(),
-    ));
-
     return_data.extend(handlers::channel_info_end());
     return_data.extend(handlers::main_menu_icon("", "")); // empty icon & url for now
     return_data.extend(handlers::friends_list(&user));
@@ -103,6 +100,15 @@ async fn login(data: Vec<u8>, pool: DBPool) -> (String, Vec<u8>) {
     return_data.extend(handlers::user_stats(&user));
 
     players.add_player(user).await;
+    return_data.extend(handlers::notification(
+        format!(
+            "Welcome to ROsu!\n\nTime Elapsed: {:.2?}\nPlayers online: {}",
+            start.elapsed(),
+            players.player_count().await
+        )
+        .as_str(),
+    ));
+
     println!("{} has logged in!", &username);
     return (token.to_string(), return_data);
 }
@@ -154,7 +160,10 @@ async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpRespo
 
 #[ntex::main]
 async fn main() -> std::io::Result<()> {
-    let pool = MySqlPoolOptions::new().connect("").await.unwrap();
+    let pool = MySqlPoolOptions::new()
+        .connect(env::var("DATABASE_URL").unwrap().as_str())
+        .await
+        .unwrap();
 
     web::server(move || {
         App::new()

@@ -147,7 +147,7 @@ impl User {
                     utc_offset: 0,
                     country: "XX".to_string(),
                     geoloc: 0,
-                    bancho_priv: BanchoPrivileges::PLAYER,
+                    bancho_priv: BanchoPrivileges::from_privileges(user_row.privileges),
                     long: 0.0,
                     lat: 0.0,
                     action: Action::Unknown,
@@ -209,6 +209,10 @@ impl PlayerList {
         return Self {
             players: Mutex::new(HashMap::new()),
         };
+    }
+
+    pub async fn player_count(&self) -> usize {
+        return self.players.lock().await.len();
     }
 
     pub async fn add_player(&self, player: User) {

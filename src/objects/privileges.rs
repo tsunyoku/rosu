@@ -48,3 +48,31 @@ bitflags! {
         const DEVELOPER = 1 << 4;
     }
 }
+
+#[allow(dead_code)]
+impl BanchoPrivileges {
+    pub fn from_value(value: i64) -> Self {
+        return Self { bits: value as u8 };
+    }
+
+    pub fn from_privileges(privileges: i64) -> Self {
+        let mut cho_priv = BanchoPrivileges::from_value(1);
+
+        if privileges & (2 << 1) > 0 {
+            // supporter
+            cho_priv.bits |= 1 << 2; // supporter
+        } else if privileges & (2 << 3) > 0 {
+            // moderator
+            cho_priv.bits |= 1 << 1; // moderator
+        } else if privileges & (2 << 15) > 0 {
+            // administrator
+            cho_priv.bits |= 1 << 3; // owner (peppy)
+        }
+
+        return cho_priv;
+    }
+
+    pub fn value(self) -> u8 {
+        return self.bits();
+    }
+}
