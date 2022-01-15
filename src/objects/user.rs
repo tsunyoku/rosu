@@ -129,8 +129,6 @@ impl User {
                 let geoloc = CountryCodes::from_str(&country.to_uppercase())
                     .unwrap_or(CountryCodes::XX) as u8;
 
-                println!("{:?}", geoloc);
-
                 return Some(Self {
                     id: user_row.id,
                     osuver: osu_ver.to_string(),
