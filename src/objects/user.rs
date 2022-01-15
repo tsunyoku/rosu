@@ -252,11 +252,33 @@ impl PlayerList {
         }
     }
 
-    pub async fn get(&self, user_id: i32) -> Option<Arc<RwLock<User>>> {
+    pub async fn get_id(&self, user_id: i32) -> Option<Arc<RwLock<User>>> {
         match self.players.lock().await.get(&user_id) {
             Some(u) => Some(u.clone()),
             _ => None,
         }
+    }
+
+    pub async fn get_username(&self, username: &str) -> Option<Arc<RwLock<User>>> {
+        for u in self.players.lock().await.values() {
+            let player = u.read().await;
+            if &player.username == username {
+                return Some(u.clone());
+            }
+        }
+
+        return None;
+    }
+
+    pub async fn get_token(&self, token: &str) -> Option<Arc<RwLock<User>>> {
+        for u in self.players.lock().await.values() {
+            let player = u.read().await;
+            if &player.token == token {
+                return Some(u.clone());
+            }
+        }
+
+        return None;
     }
 
     pub async fn remove(&mut self, user_id: i32) {

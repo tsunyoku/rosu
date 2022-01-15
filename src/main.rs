@@ -13,8 +13,10 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use maxminddb::{geoip2, Reader};
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
+use tokio::sync::Mutex;
 
 use crate::objects::user::{PlayerList, User};
 use crate::packets::handlers;
@@ -26,6 +28,7 @@ type DBPool = web::types::Data<Pool<MySql>>;
 lazy_static! {
     static ref players: PlayerList = PlayerList::new();
     static ref reader: Reader<Vec<u8>> = Reader::open_readfile("ext/geoloc.mmdb").unwrap();
+    static ref bcrypt_cache: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
 #[allow(unused_variables)]
@@ -79,10 +82,23 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
     };
 
     // verify password, using web::block to avoid blocking the thread
-    let md5 = user.password_md5.clone();
-    let valid_password = web::block(move || bcrypt::verify(password, &md5))
-        .await
-        .unwrap();
+    let bcrypt = user.password_md5.clone();
+
+    let to_cache = user.password_md5.clone();
+    let md5 = password.clone();
+
+    let valid_password: bool;
+    let cached: bool;
+    if !bcrypt_cache.lock().await.contains_key(&md5) {
+        valid_password = web::block(move || bcrypt::verify(password, &bcrypt))
+            .await
+            .unwrap();
+
+        cached = false;
+    } else {
+        valid_password = bcrypt_cache.lock().await.get(&md5).unwrap() == &to_cache;
+        cached = true;
+    }
 
     if !valid_password {
         return_data.extend(handlers::user_id(-1));
@@ -90,6 +106,8 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
 
         return ("no".to_string(), return_data);
     }
+
+    bcrypt_cache.lock().await.insert(md5, to_cache);
 
     // parse geoloc
     let ip: &str;
@@ -143,7 +161,7 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
         .as_str(),
     ));
 
-    println!("{} has logged in!", &username);
+    println!("{} has logged in! | cached: {}", &username, cached);
     return (token.to_string(), return_data);
 }
 
