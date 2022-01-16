@@ -124,11 +124,6 @@ impl Serialize for Packets {
     }
 }
 
-trait Handler {
-    fn callback(&self) -> ();
-}
-
-
 #[derive(Debug, PartialEq, EnumString)]
 pub enum CountryCodes {
     UN = 0,
