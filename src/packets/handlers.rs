@@ -4,7 +4,7 @@ use crate::objects::mode::Mode;
 use crate::objects::mods::Mods;
 use crate::packets::reader::Reader;
 use crate::packets::writer::PacketWriter;
-use crate::{players, db};
+use crate::players;
 
 use tokio::sync::RwLockReadGuard;
 use std::collections::HashMap;
