@@ -19,7 +19,7 @@ For security and ease of use, you set this url as the environment variable `DATA
 - [x] Logins, sessions and logouts
 - [x] Stats, presence and action updates
 - [x] Adding/removing friends
-- [x] Spectators
+- [x] Spectating
 - [ ] Channels
 - [ ] Messages
 - [ ] Multiplayer
