@@ -23,3 +23,4 @@ For security and ease of use, you set this url as the environment variable `DATA
 - [ ] Channels
 - [ ] Messages
 - [ ] Multiplayer
+- [ ] pep.py pubsub support
