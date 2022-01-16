@@ -2,12 +2,14 @@ use crate::constants::CountryCodes;
 use crate::objects::mode::{Mode, Stats};
 use crate::objects::mods::Mods;
 use crate::objects::privileges::{BanchoPrivileges, Privileges};
+use crate::packets::handlers;
+use crate::{players, db};
+
 use uuid::Uuid;
 
-use ntex::web;
 use serde::{Serialize, Serializer};
-use sqlx::{MySql, Pool};
 use std::str::FromStr;
+use num_derive::FromPrimitive;
 
 use strum::IntoEnumIterator;
 
@@ -99,9 +101,11 @@ pub_struct!(User {
     queue: PacketQueue, // for sending packets to the user
 
     stats: Vec<Stats>,
-});
+    friends: Vec<i32>,
 
-type DBPool = web::types::Data<Pool<MySql>>;
+    spectating: Option<i32>,
+    spectators: Vec<i32>,
+});
 
 impl User {
     // perhaps the worst part of this entire code rn
@@ -110,30 +114,36 @@ impl User {
         token: Uuid,
         osu_ver: &str,
         offset: i32,
-        pool: DBPool,
     ) -> Option<Self> {
         let user_row = sqlx::query!(
             "select * from users where username_safe = ?",
             username.to_lowercase().replace(" ", "_")
         )
-        .fetch_one(&**pool)
+        .fetch_one(db.get().unwrap())
         .await;
 
         match user_row {
             Ok(user_row) => {
                 let country =
                     sqlx::query!("select country from users_stats where id = ?", user_row.id)
-                        .fetch_one(&**pool)
+                        .fetch_one(db.get().unwrap())
                         .await
                         .unwrap()
                         .country;
+
+                let friend_rows = sqlx::query!("select user2 from users_relationships where user1 = ?", user_row.id)
+                                    .fetch_all(db.get().unwrap())
+                                    .await
+                                    .unwrap();
+
+                let friends_vec = friend_rows.iter().map(|v| v.user2).collect::<Vec<i32>>();
 
                 let geoloc = CountryCodes::from_str(&country.to_uppercase())
                     .unwrap_or(CountryCodes::XX) as u8;
 
                 let mut stats_vec: Vec<Stats> = Vec::new();
                 for mode in Mode::iter() {
-                    stats_vec.push(Stats::for_mode(mode, user_row.id, &pool).await);
+                    stats_vec.push(Stats::for_mode(mode, user_row.id).await);
                 }
 
                 return Some(Self {
@@ -179,6 +189,9 @@ impl User {
                     token: token.to_string(),
                     queue: PacketQueue::new(),
                     stats: stats_vec,
+                    friends: friends_vec,
+                    spectating: None,
+                    spectators: Vec::new(),
                 });
             }
             _ => return None,
@@ -192,9 +205,83 @@ impl User {
     pub async fn dequeue(&self) -> Vec<u8> {
         return self.queue.dequeue().await;
     }
+
+    pub fn restricted(&self) -> bool {
+        return self.privileges & Privileges::USER_PUBLIC == Privileges::USER_PUBLIC;
+    }
+
+    pub async fn add_friend(&mut self, target: i32) {
+        self.friends.push(target);
+
+        sqlx::query("INSERT INTO users_relationships (user1, user2) VALUES (?, ?)")
+            .bind(self.id)
+            .bind(target)
+            .execute(db.get().unwrap())
+            .await.unwrap();
+    }
+
+    pub async fn remove_friend(&mut self, target: i32) {
+        let user_index = self.friends.iter().position(|x| *x == target).unwrap();
+        self.friends.remove(user_index);
+
+        sqlx::query("DELETE FROM users_relationships WHERE user1 = ? AND user2 = ?")
+            .bind(self.id)
+            .bind(target)
+            .execute(db.get().unwrap())
+            .await.unwrap();
+    }
+
+    pub async fn logout(&mut self) {
+        players.remove_player(self.id).await;
+
+        if !self.restricted() {
+            players.enqueue(handlers::logout(self.id)).await;
+        }
+    }
+
+    pub async fn add_spectator(&mut self, user: &mut User) {
+        let join_packet = handlers::spectator_joined(user.id);
+
+        // check, optionally create, and join spec channel
+
+        for uid in &self.spectators {
+            let u = players.get_id(*uid).await.unwrap();
+            let _user = u.read().await;
+
+            _user.enqueue(join_packet.clone()).await;
+            user.enqueue(handlers::spectator_joined(_user.id)).await;
+        }
+
+        self.spectators.push(user.id);
+        user.spectating = Some(self.id);
+
+        self.enqueue(handlers::host_spectator_joined(user.id)).await;
+        println!("{} started spectating {}", user.username, self.username);
+    }
+
+    pub async fn remove_spectator(&mut self, user: &mut User) {
+        let user_index = self.spectators.iter().position(|x| *x == user.id).unwrap();
+        self.spectators.remove(user_index);
+        user.spectating = None;
+
+        // leave spec channel (update channel info etc.) &
+        // check if remaining spectators == 0 and remove self if so
+
+        let leave_packet = handlers::spectator_left(user.id);
+        for uid in &self.spectators {
+            // this will need to be in the else clause of channel deletion once it exists
+            let u = players.get_id(*uid).await.unwrap();
+            let _user = u.read().await;
+
+            _user.enqueue(leave_packet.clone()).await;
+        }
+
+        self.enqueue(handlers::host_spectator_left(user.id)).await;
+        println!("{} stopped spectating {}", user.username, self.username);
+    }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, FromPrimitive)]
 #[repr(u8)]
 pub enum Action {
     Idle = 0,
@@ -223,7 +310,7 @@ impl Serialize for Action {
 }
 
 pub struct PlayerList {
-    players: Mutex<HashMap<i32, Arc<RwLock<User>>>>,
+    pub players: Mutex<HashMap<i32, Arc<RwLock<User>>>>,
 }
 
 impl PlayerList {
@@ -242,6 +329,10 @@ impl PlayerList {
 
         let player_arc = Arc::from(RwLock::from(player));
         self.players.lock().await.insert(user_id, player_arc);
+    }
+
+    pub async fn remove_player(&self, user_id: i32) {
+        self.players.lock().await.remove(&user_id);
     }
 
     pub async fn enqueue(&self, bytes: Vec<u8>) {

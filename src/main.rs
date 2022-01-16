@@ -25,14 +25,13 @@ use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 use crate::objects::user::{PlayerList, User};
-use crate::packets::handlers::{self, PACKET_HANDLERS};
+use crate::packets::handlers::{self, PACKET_HANDLERS, RESTRICTED_PACKET_HANDLERS};
 use crate::packets::reader::Reader;
 use crate::constants::Packets;
 
 use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use num_traits::FromPrimitive;
-
-type DBPool = web::types::Data<Pool<MySql>>;
 
 lazy_static! {
     static ref players: PlayerList = PlayerList::new();
@@ -41,8 +40,10 @@ lazy_static! {
     static ref bcrypt_cache: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
+static db: OnceCell<Pool<MySql>> = OnceCell::new();
+
 #[inline(always)]
-async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec<u8>) {
+async fn login(data: Vec<u8>, headers: &HeaderMap) -> (String, Vec<u8>) {
     let start = Instant::now();
 
     let mut return_data: Vec<u8> = Vec::new();
@@ -81,7 +82,7 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
     let private_dms = client_info[4] == "1";
 
     let token = Uuid::new_v4();
-    let user_result = User::from_sql(&username, token, osu_ver, utc_offset, pool).await;
+    let user_result = User::from_sql(&username, token, osu_ver, utc_offset).await;
 
     let mut user = match user_result {
         Some(user) => user,
@@ -97,16 +98,12 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
     let md5 = password.clone();
 
     let valid_password: bool;
-    let cached: bool;
     if !bcrypt_cache.lock().await.contains_key(&md5) {
         valid_password = web::block(move || bcrypt::verify(password, &bcrypt))
             .await
             .unwrap();
-
-        cached = false;
     } else {
         valid_password = bcrypt_cache.lock().await.get(&md5).unwrap() == &to_cache;
-        cached = true;
     }
 
     if !valid_password {
@@ -170,13 +167,13 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
         .as_str(),
     ));
 
-    println!("{} has logged in! | cached: {}", &username, cached);
+    println!("{} has logged in!", &username);
     return (token.to_string(), return_data);
 }
 
-async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse {
+async fn bancho(req: HttpRequest, _data: Vec<u8>) -> HttpResponse {
     if !req.headers().contains_key("osu-token") {
-        let (token, login_data) = login(_data, _pool, &req.headers()).await;
+        let (token, login_data) = login(_data, &req.headers()).await;
 
         if login_data.len() == 0 {
             // invalid request
@@ -202,16 +199,22 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse
         }
     }
 
-    let player = user.read().await; // get readable player
+    let mut player = user.write().await; // get readable player
     let mut _reader = Reader::new(_data);
 
     while !_reader.empty() {
         let (id, len) = _reader.read_header();
         let packet = Packets::from_i32(id).unwrap();
 
-        if PACKET_HANDLERS.contains_key(&packet) {
-            let callback = PACKET_HANDLERS[&packet];
-            callback(&player, &_reader).await;
+        // &* lmao
+        let mut handler_map = &*PACKET_HANDLERS;
+        if player.restricted() {
+            handler_map = &*RESTRICTED_PACKET_HANDLERS;
+        }
+
+        if handler_map.contains_key(&packet) {
+            let callback = handler_map[&packet];
+            callback(&mut player, &mut _reader).await;
 
             if packet != Packets::OSU_PING {
                 println!("Packet {:?} handled for {}", packet, player.username);
@@ -227,7 +230,7 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse
     return HttpResponse::Ok().body(packet_data);
 }
 
-async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpResponse {
+async fn handle_conn(req: HttpRequest, _data: Bytes) -> HttpResponse {
     match req.method() {
         &Method::GET => {
             // GET request, render index
@@ -237,7 +240,7 @@ async fn handle_conn(req: HttpRequest, _data: Bytes, _pool: DBPool) -> HttpRespo
             // POST request, should be login/packet update request
             if req.headers().get("User-Agent").unwrap().to_str().unwrap() == "osu!" {
                 // it's osu!
-                return bancho(req, _data.to_vec(), _pool).await;
+                return bancho(req, _data.to_vec()).await;
             } else {
                 // not osu!, render index
                 return HttpResponse::Ok().body("rosu 2022™️");
@@ -256,9 +259,10 @@ async fn main() -> std::io::Result<()> {
         .await
         .unwrap();
 
+    db.set(pool).unwrap();
+
     web::server(move || {
         App::new()
-            .data(pool.clone())
             .wrap(middleware::Logger::default())
             .service(web::resource("/").to(handle_conn))
     })

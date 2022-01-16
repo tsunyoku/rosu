@@ -36,3 +36,13 @@ bitflags! {
         const MIRROR = 1 << 30;
     }
 }
+
+impl Mods {
+    pub fn from_value(value: i32) -> Self {
+        return Self { bits: value };
+    }
+
+    pub fn value(self) -> i32 {
+        return self.bits();
+    }
+}

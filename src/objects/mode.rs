@@ -1,7 +1,6 @@
-use ntex::web;
-use num_enum::TryFromPrimitive;
-use sqlx::{MySql, Pool};
+use crate::db;
 
+use num_enum::TryFromPrimitive;
 use strum_macros::EnumIter;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, TryFromPrimitive, EnumIter)]
@@ -27,7 +26,7 @@ const RELAX_MODES: &[Mode; 3] = &[Mode::std_rx, Mode::taiko_rx, Mode::catch_rx];
 const VANILLA_MODES: &[Mode; 4] = &[Mode::std, Mode::taiko, Mode::catch, Mode::mania];
 
 impl Mode {
-    fn stats_table(&self) -> &'static str {
+    pub fn stats_table(&self) -> &'static str {
         if RELAX_MODES.contains(self) {
             return "rx_stats";
         } else if VANILLA_MODES.contains(self) {
@@ -37,7 +36,7 @@ impl Mode {
         }
     }
 
-    fn as_vn(self) -> i32 {
+    pub fn as_vn(self) -> i32 {
         if STD_MODES.contains(&self) {
             return 0;
         } else if TAIKO_MODES.contains(&self) {
@@ -49,7 +48,7 @@ impl Mode {
         }
     }
 
-    fn sql_suffix(self) -> &'static str {
+    pub fn sql_suffix(self) -> &'static str {
         if STD_MODES.contains(&self) {
             return "std";
         } else if TAIKO_MODES.contains(&self) {
@@ -61,7 +60,7 @@ impl Mode {
         }
     }
 
-    fn from_mods(mode: i32, mods: i32) -> Self {
+    pub fn from_mods(mode: i32, mods: i32) -> Self {
         if mods & 128 > 0 {
             // 128 = relax
             if mode == 3 {
@@ -92,10 +91,8 @@ pub struct Stats {
     // TODO: rank
 }
 
-type DBPool = web::types::Data<Pool<MySql>>;
-
 impl Stats {
-    pub async fn for_mode(mode: Mode, user_id: i32, pool: &DBPool) -> Self {
+    pub async fn for_mode(mode: Mode, user_id: i32) -> Self {
         let query: String = format!(
             "select total_score_{suffix} as total_score, ranked_score_{suffix} as ranked_score, 
             avg_accuracy_{suffix} as accuracy, playcount_{suffix} as playcount, pp_{suffix} as pp 
@@ -106,7 +103,7 @@ impl Stats {
 
         let mode = sqlx::query_as::<_, Self>(&query)
             .bind(user_id)
-            .fetch_one(&***pool)
+            .fetch_one(db.get().unwrap())
             .await
             .unwrap();
 

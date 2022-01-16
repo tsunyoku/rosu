@@ -95,6 +95,14 @@ impl Reader {
         return (packet_id as i32, packet_len);
     }
 
+    pub fn read_raw(&mut self) -> Vec<u8> {
+        let len = self.buf.len() - self.offset;
+        let data = &self.buf.clone()[self.offset..self.offset + len];
+
+        self.incr_offset(len);
+        return data.to_vec();
+    }
+
     pub fn empty(&self) -> bool {
         return self.buf.len() <= self.offset;
     }
