@@ -164,7 +164,7 @@ pub type HandlerHashMap = HashMap<
             for<'lt> fn(
                 user: &'lt mut User,
                 reader: &'lt mut Reader,
-            ) -> BoxFuture<'lt, ()>>;
+            ) -> BoxFuture<'lt, bool>>;
 
 macro_rules! register_packets {(
     $(
@@ -172,7 +172,7 @@ macro_rules! register_packets {(
      $( #[$attr:meta] )*
         $pub:vis
         async
-        fn $fname:ident ($user:ident : & $('_)? mut User, $reader:ident : & $('_)? mut Reader) $( -> () )?
+        fn $fname:ident ($user:ident : & $('_)? mut User, $reader:ident : & $('_)? mut Reader) -> bool
         $body:block
     )*
 ) => (
@@ -182,9 +182,9 @@ macro_rules! register_packets {(
         fn $fname<'lt> (
             $user : &'lt mut User,
             $reader : &'lt mut Reader,
-        ) -> BoxFuture<'lt, ()>
+        ) -> BoxFuture<'lt, bool>
         {
-            FutureExt::boxed(async move {
+            return FutureExt::boxed(async move {
                 let _ = (&$user, &$reader);
                 $body
             })
@@ -213,44 +213,47 @@ macro_rules! register_packets {(
 // read handlers
 register_packets! {
     // format for attribute: #[packet(packet_enum, allowed while restricted)]
+    // each function returns a bool of whether or not the reader buffer should be incremented
 
     #[packet(Packets::OSU_PING, true)]
     #[inline(always)]
-    pub async fn ping(user: &mut User, reader: &mut Reader) {
+    pub async fn ping(user: &mut User, reader: &mut Reader) -> bool {
         let mut writer = PacketWriter::new(Packets::CHO_PONG);
         let pong = writer.serialize();
 
         user.enqueue(pong).await;
+        return true;
     }
 
     #[packet(Packets::OSU_REQUEST_STATUS_UPDATE, true)]
     #[inline(always)]
-    pub async fn status_update(user: &mut User, reader: &mut Reader) {
-        let stats = user_stats(user);
-
-        user.enqueue(stats).await;
+    pub async fn status_update(user: &mut User, reader: &mut Reader) -> bool {
+        user.enqueue(user_stats(user)).await;
+        return true;
     }
 
     #[packet(Packets::OSU_USER_STATS_REQUEST, true)]
     #[inline(always)]
-    pub async fn stats_request(user: &mut User, reader: &mut Reader) {
+    pub async fn stats_request(user: &mut User, reader: &mut Reader) -> bool {
         let user_ids = reader.read_i32_list();
 
         for uid in user_ids {
             match players.get_id(uid).await {
                 Some(u) => {
-                    if uid != user.id && !u.read().await.restricted() {
+                    if !u.read().await.restricted() {
                         user.enqueue(user_presence(user)).await;
                     }
                 },
                 _ => (),
             }
         }
+
+        return false;
     }
 
     #[packet(Packets::OSU_USER_PRESENCE_REQUEST, true)]
     #[inline(always)]
-    pub async fn presence_request(user: &mut User, reader: &mut Reader) {
+    pub async fn presence_request(user: &mut User, reader: &mut Reader) -> bool {
         let user_ids = reader.read_i32_list();
 
         for uid in user_ids {
@@ -262,55 +265,65 @@ register_packets! {
                 _ => (),
             }
         }
+
+        return false;
     }
 
     #[packet(Packets::OSU_USER_PRESENCE_REQUEST_ALL, true)]
     #[inline(always)]
-    pub async fn full_presence(user: &mut User, reader: &mut Reader) {
+    pub async fn full_presence(user: &mut User, reader: &mut Reader) -> bool {
         for u in players.players.lock().await.values() {
             let _user = &u.read().await;
 
-            if _user.id != user.id && !_user.restricted() {
+            if !_user.restricted() {
                 user.enqueue(user_presence(_user)).await;
             }
         }
+
+        return true;
     }
 
     #[packet(Packets::OSU_FRIEND_ADD, true)]
     #[inline(always)]
-    pub async fn add_friend(user: &mut User, reader: &mut Reader) {
+    pub async fn add_friend(user: &mut User, reader: &mut Reader) -> bool {
         let target: i32 = reader.read_int();
 
         if user.friends.contains(&target) {
-            return;
+            return false;
         }
 
         user.add_friend(target).await;
+
+        return false;
     }
 
     #[packet(Packets::OSU_FRIEND_REMOVE, true)]
     #[inline(always)]
-    pub async fn remove_friend(user: &mut User, reader: &mut Reader) {
+    pub async fn remove_friend(user: &mut User, reader: &mut Reader) -> bool {
         let target: i32 = reader.read_int();
 
         if !user.friends.contains(&target) {
-            return;
+            return false;
         }
 
         user.remove_friend(target).await;
+
+        return false;
     }
 
     #[packet(Packets::OSU_LOGOUT, true)]
     #[inline(always)]
-    pub async fn user_logout(user: &mut User, reader: &mut Reader) {
+    pub async fn user_logout(user: &mut User, reader: &mut Reader) -> bool {
         user.logout().await;
 
         println!("{} logged out", user.username);
+
+        return true;
     }
 
     #[packet(Packets::OSU_CHANGE_ACTION, true)]
     #[inline(always)]
-    pub async fn change_action(user: &mut User, reader: &mut Reader) {
+    pub async fn change_action(user: &mut User, reader: &mut Reader) -> bool {
         let action_id: u8 = reader.read_int();
         let action_info: String = reader.read_str();
         let map_md5: String = reader.read_str();
@@ -328,37 +341,43 @@ register_packets! {
         if !user.restricted() {
             players.enqueue(user_stats(user)).await;
         }
+
+        return false;
     }
 
     #[packet(Packets::OSU_START_SPECTATING, false)]
     #[inline(always)]
-    pub async fn start_spectating(user: &mut User, reader: &mut Reader) {
+    pub async fn start_spectating(user: &mut User, reader: &mut Reader) -> bool {
         let target: i32 = reader.read_int();
 
         if target == 999 || target == 1 { // ignore the bot
-            return;
+            return false;
         }
 
         let u = players.get_id(target).await.unwrap();
         let mut _user = u.write().await;
         _user.add_spectator(user).await;
+
+        return false;
     }
 
     #[packet(Packets::OSU_STOP_SPECTATING, false)]
     #[inline(always)]
-    pub async fn stop_spectating(user: &mut User, reader: &mut Reader) {
+    pub async fn stop_spectating(user: &mut User, reader: &mut Reader) -> bool  {
         if user.spectating == None {
-            return
+            return true;
         }
 
         let u = players.get_id(user.spectating.unwrap()).await.unwrap();
         let mut _user = u.write().await;
         _user.remove_spectator(user).await;
+
+        return true;
     }
 
     #[packet(Packets::OSU_SPECTATE_FRAMES, false)]
     #[inline(always)]
-    pub async fn user_spectate_frames(user: &mut User, reader: &mut Reader) {
+    pub async fn user_spectate_frames(user: &mut User, reader: &mut Reader) -> bool {
         let frames = reader.read_raw();
 
         let frames_packet = spectate_frames(frames);
@@ -368,6 +387,7 @@ register_packets! {
             _user.enqueue(frames_packet.clone()).await;
         }
         
+        return false;
     }
 
     // TODO: channels & msgs (left as realistik wants to do them)

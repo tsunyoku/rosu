@@ -214,7 +214,11 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>) -> HttpResponse {
 
         if handler_map.contains_key(&packet) {
             let callback = handler_map[&packet];
-            callback(&mut player, &mut _reader).await;
+            let should_increment = callback(&mut player, &mut _reader).await;
+
+            if should_increment {
+                _reader.incr_offset(len as usize);
+            }
 
             if packet != Packets::OSU_PING {
                 println!("Packet {:?} handled for {}", packet, player.username);
@@ -225,7 +229,6 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>) -> HttpResponse {
     }
 
     let return_data = player.dequeue().await;
-
     let packet_data = unsafe { String::from_utf8_unchecked(return_data) };
     return HttpResponse::Ok().body(packet_data);
 }

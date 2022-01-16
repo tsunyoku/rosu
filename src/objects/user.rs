@@ -180,7 +180,7 @@ impl User {
                     bancho_priv: BanchoPrivileges::from_privileges(user_row.privileges),
                     long: 0.0, // set later in login
                     lat: 0.0,  // set later in login
-                    action: Action::Unknown,
+                    action: Action::Idle,
                     info_text: "".to_string(),
                     map_md5: "".to_string(),
                     mods: Mods::NOMOD,
@@ -207,7 +207,7 @@ impl User {
     }
 
     pub fn restricted(&self) -> bool {
-        return self.privileges & Privileges::USER_PUBLIC == Privileges::USER_PUBLIC;
+        return self.privileges & Privileges::USER_PUBLIC < Privileges::USER_PUBLIC;
     }
 
     pub async fn add_friend(&mut self, target: i32) {
@@ -338,6 +338,7 @@ impl PlayerList {
     pub async fn enqueue(&self, bytes: Vec<u8>) {
         for player in self.players.lock().await.values() {
             let user = player.read().await;
+            println!("playerlist enqueue sent to {}", user.username);
             user.enqueue(bytes.clone()).await;
         }
     }
