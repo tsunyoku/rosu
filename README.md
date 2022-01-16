@@ -16,4 +16,10 @@ For security and ease of use, you set this url as the environment variable `DATA
 
 ## Features
 
-Currently, logins are 100% functional and we are beginning to handle packets that are sent to the server post login (action updates etc.)
+- [x] Logins, sessions and logouts
+- [x] Stats, presence and action updates
+- [x] Adding/removing friends
+- [x] Spectators
+- [ ] Channels
+- [ ] Messages
+- [ ] Multiplayer
