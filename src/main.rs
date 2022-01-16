@@ -1,3 +1,9 @@
+// i didn't want to add these global allows, but some are unfixable cus rust isn't smart enough
+#![allow(non_upper_case_globals)]
+#![allow(unused_variables)]
+#![allow(non_camel_case_types)]
+#![allow(dead_code)]
+
 mod constants;
 mod objects;
 mod packets;
@@ -12,26 +18,29 @@ use std::env;
 use std::time::Instant;
 use uuid::Uuid;
 
-use maxminddb::{geoip2, Reader};
-use std::collections::HashMap;
+use maxminddb::{geoip2, Reader as MaxmindReader};
 use std::net::IpAddr;
 use std::str::FromStr;
-use tokio::sync::Mutex;
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 
 use crate::objects::user::{PlayerList, User};
-use crate::packets::handlers;
+use crate::packets::handlers::{self, PACKET_HANDLERS};
+use crate::packets::reader::Reader;
+use crate::constants::Packets;
 
 use lazy_static::lazy_static;
+use num_traits::FromPrimitive;
 
 type DBPool = web::types::Data<Pool<MySql>>;
 
 lazy_static! {
     static ref players: PlayerList = PlayerList::new();
-    static ref reader: Reader<Vec<u8>> = Reader::open_readfile("ext/geoloc.mmdb").unwrap();
+    static ref reader: MaxmindReader<Vec<u8>> =
+        MaxmindReader::open_readfile("ext/geoloc.mmdb").unwrap();
     static ref bcrypt_cache: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 }
 
-#[allow(unused_variables)]
 #[inline(always)]
 async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec<u8>) {
     let start = Instant::now();
@@ -166,8 +175,6 @@ async fn login(data: Vec<u8>, pool: DBPool, headers: &HeaderMap) -> (String, Vec
 }
 
 async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse {
-    let return_data: Vec<u8> = Vec::new();
-
     if !req.headers().contains_key("osu-token") {
         let (token, login_data) = login(_data, _pool, &req.headers()).await;
 
@@ -183,6 +190,38 @@ async fn bancho(req: HttpRequest, _data: Vec<u8>, _pool: DBPool) -> HttpResponse
     }
 
     // already logged in client-side
+    let token = req.headers().get("osu-token").unwrap().to_str().unwrap();
+
+    let user: Arc<RwLock<User>>; // arc'd player, we will read from the arc below
+    match players.get_token(token).await {
+        Some(u) => user = u,
+        _ => {
+            let return_vec = handlers::server_restart(0);
+
+            return HttpResponse::Ok().body(unsafe { String::from_utf8_unchecked(return_vec) });
+        }
+    }
+
+    let player = user.read().await; // get readable player
+    let mut _reader = Reader::new(_data);
+
+    while !_reader.empty() {
+        let (id, len) = _reader.read_header();
+        let packet = Packets::from_i32(id).unwrap();
+
+        if PACKET_HANDLERS.contains_key(&packet) {
+            let callback = PACKET_HANDLERS[&packet];
+            callback(&player, &_reader).await;
+
+            if packet != Packets::OSU_PING {
+                println!("Packet {:?} handled for {}", packet, player.username);
+            }
+        } else {
+            _reader.incr_offset(len as usize);
+        }
+    }
+
+    let return_data = player.dequeue().await;
 
     let packet_data = unsafe { String::from_utf8_unchecked(return_data) };
     return HttpResponse::Ok().body(packet_data);

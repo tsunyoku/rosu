@@ -1,9 +1,8 @@
 use serde::{Serialize, Serializer};
 use strum_macros::EnumString;
+use num_derive::FromPrimitive;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(non_camel_case_types)]
-#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, FromPrimitive, Hash)]
 #[repr(i16)]
 pub enum Packets {
     OSU_CHANGE_ACTION = 0,
@@ -124,6 +123,11 @@ impl Serialize for Packets {
         serializer.serialize_i16(*self as i16)
     }
 }
+
+trait Handler {
+    fn callback(&self) -> ();
+}
+
 
 #[derive(Debug, PartialEq, EnumString)]
 pub enum CountryCodes {

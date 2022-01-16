@@ -22,12 +22,10 @@ macro_rules! pub_struct { // w.
     }
 }
 
-#[allow(dead_code)]
 pub struct PacketQueue {
     queue: Mutex<Vec<u8>>,
 }
 
-#[allow(dead_code)]
 impl PacketQueue {
     pub fn new() -> Self {
         return Self {
@@ -190,11 +188,13 @@ impl User {
     pub async fn enqueue(&self, bytes: Vec<u8>) {
         self.queue.enqueue(bytes).await;
     }
+
+    pub async fn dequeue(&self) -> Vec<u8> {
+        return self.queue.dequeue().await;
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(non_camel_case_types)]
-#[allow(dead_code)]
 #[repr(u8)]
 pub enum Action {
     Idle = 0,
@@ -226,7 +226,6 @@ pub struct PlayerList {
     players: Mutex<HashMap<i32, Arc<RwLock<User>>>>,
 }
 
-#[allow(dead_code)]
 impl PlayerList {
     pub fn new() -> Self {
         return Self {

@@ -28,7 +28,6 @@ bitflags! {
     }
 }
 
-#[allow(dead_code)]
 impl Privileges {
     pub fn from_value(value: i64) -> Self {
         return Self { bits: value };
@@ -49,7 +48,6 @@ bitflags! {
     }
 }
 
-#[allow(dead_code)]
 impl BanchoPrivileges {
     pub fn from_value(value: i64) -> Self {
         return Self { bits: value as i32 };

@@ -1,6 +1,11 @@
 use crate::constants::Packets;
 use crate::objects::user::User;
+use crate::packets::reader::Reader;
 use crate::packets::writer::PacketWriter;
+
+use tokio::sync::RwLockReadGuard;
+use std::collections::HashMap;
+use futures::future::{BoxFuture, FutureExt};
 
 #[inline(always)]
 pub fn user_id(user_id: i32) -> Vec<u8> {
@@ -99,4 +104,62 @@ pub fn user_stats(user: &User) -> Vec<u8> {
     writer += stats.pp as i16;
 
     return writer.serialize();
+}
+
+#[inline(always)]
+pub fn server_restart(time: i32) -> Vec<u8> {
+    let mut writer = PacketWriter::new(Packets::CHO_RESTART);
+    writer += time;
+    return writer.serialize();
+}
+
+macro_rules! register_packets {(
+    $(
+        #[packet($id:path $(,)?)]
+     $( #[$attr:meta] )*
+        $pub:vis
+        async
+        fn $fname:ident ($user:ident : & $('_)? RwLockReadGuard<$('_, )? User>, $reader:ident : & $('_)? Reader) $( -> () )?
+        $body:block
+    )*
+) => (
+    $(
+     $( #[$attr] )*
+        $pub
+        fn $fname<'lt> (
+            $user : &'lt RwLockReadGuard<'_, User>,
+            $reader : &'lt Reader,
+        ) -> BoxFuture<'lt, ()>
+        {
+            FutureExt::boxed(async move {
+                let _ = (&$user, $reader);
+                $body
+            })
+        }
+    )*
+
+    lazy_static::lazy_static! {
+        pub static ref PACKET_HANDLERS: HashMap<
+            Packets,
+            for<'lt> fn(
+                user: &'lt RwLockReadGuard<'_, User>,
+                reader: &'lt Reader,
+            ) -> BoxFuture<'lt, ()>,
+        > = {
+            let mut map = HashMap::new();
+            $( map.insert($id, $fname as _); )*
+            map
+        };
+    }
+)}
+
+// read handlers
+register_packets! {
+    #[packet(Packets::OSU_PING)]
+    pub async fn ping(user: &RwLockReadGuard<'_, User>, reader: &Reader) {
+        let mut writer = PacketWriter::new(Packets::CHO_PONG);
+        let pong = writer.serialize();
+
+        user.enqueue(pong).await;
+    }
 }

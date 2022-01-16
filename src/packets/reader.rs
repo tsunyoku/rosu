@@ -5,7 +5,6 @@ pub struct Reader {
     offset: usize,
 }
 
-#[allow(dead_code)]
 impl Reader {
     pub fn new(packet: Vec<u8>) -> Self {
         Self {
@@ -14,7 +13,7 @@ impl Reader {
         }
     }
 
-    fn incr_offset(&mut self, amount: usize) {
+    pub fn incr_offset(&mut self, amount: usize) {
         self.offset += amount;
     }
 
@@ -27,9 +26,10 @@ impl Reader {
 
     // Maybe this should be part of read_int. Would be easily doable.
     pub fn read_f32(&mut self) -> f32 {
-        let val = f32::from_le_bytes(self.buf[self.offset..self.offset + 4]
-            .try_into()
-            .expect("Should never happen.")
+        let val = f32::from_le_bytes(
+            self.buf[self.offset..self.offset + 4]
+                .try_into()
+                .expect("Should never happen."),
         );
         self.incr_offset(4);
         val
@@ -64,7 +64,6 @@ impl Reader {
         let len = self.read_uleb128() as usize;
         let string = String::from_utf8(self.buf[self.offset..self.offset + len].into())
             .unwrap_or(String::new());
-        
         self.incr_offset(len as usize);
 
         string
@@ -84,6 +83,20 @@ impl Reader {
         }
 
         l
+    }
+
+    pub fn read_header(&mut self) -> (i32, u32) {
+        let packet_id: u16 = self.read_int();
+
+        self.incr_offset(1); // padding byte
+
+        let packet_len: u32 = self.read_int();
+
+        return (packet_id as i32, packet_len);
+    }
+
+    pub fn empty(&self) -> bool {
+        return self.buf.len() <= self.offset;
     }
 }
 

@@ -5,8 +5,6 @@ use sqlx::{MySql, Pool};
 use strum_macros::EnumIter;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, TryFromPrimitive, EnumIter)]
-#[allow(non_camel_case_types)]
-#[allow(dead_code)]
 #[repr(i32)]
 pub enum Mode {
     std = 0,
@@ -28,7 +26,6 @@ const CATCH_MODES: &[Mode; 2] = &[Mode::catch, Mode::catch_rx];
 const RELAX_MODES: &[Mode; 3] = &[Mode::std_rx, Mode::taiko_rx, Mode::catch_rx];
 const VANILLA_MODES: &[Mode; 4] = &[Mode::std, Mode::taiko, Mode::catch, Mode::mania];
 
-#[allow(dead_code)]
 impl Mode {
     fn stats_table(&self) -> &'static str {
         if RELAX_MODES.contains(self) {
