@@ -159,6 +159,16 @@ pub fn spectate_frames(frames: Vec<u8>) -> Vec<u8> {
     return writer.serialize();
 }
 
+#[inline(always)]
+pub fn channel_message(src_name: String, src_id: i32, content: String, target_name: String) -> Vec<u8> {
+    let mut writer = PacketWriter::new(Packets::CHO_SEND_MESSAGE);
+    writer += src_name;
+    writer += content;
+    writer += target_name;
+    writer += src_id;
+    return writer.serialize(); // Ew american.
+}
+
 pub type HandlerHashMap = HashMap<
             Packets,
             for<'lt> fn(

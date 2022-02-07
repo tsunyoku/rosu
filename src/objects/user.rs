@@ -2,6 +2,7 @@ use crate::constants::CountryCodes;
 use crate::objects::mode::{Mode, Stats};
 use crate::objects::mods::Mods;
 use crate::objects::privileges::{BanchoPrivileges, Privileges};
+use crate::objects::channel;
 use crate::packets::handlers;
 use crate::{players, db};
 
@@ -105,6 +106,7 @@ pub_struct!(User {
 
     spectating: Option<i32>,
     spectators: Vec<i32>,
+    channels: HashMap<String, Arc<Channel>>,
 });
 
 impl User {
@@ -232,7 +234,7 @@ impl User {
     }
 
     pub async fn logout(&mut self) {
-        players.remove_player(self.id).await;
+        players.remove(self.id).await;
 
         if !self.restricted() {
             players.enqueue(handlers::logout(self.id)).await;
@@ -331,8 +333,10 @@ impl PlayerList {
         self.players.lock().await.insert(user_id, player_arc);
     }
 
-    pub async fn remove_player(&self, user_id: i32) {
-        self.players.lock().await.remove(&user_id);
+    // Adds an rwlocked player shared pointer to the player list.
+    pub async fn add_player_ptr(&self, player: Arc<RwLock<User>>) {
+        let user_id = player.read().await.id.clone();
+        self.players.lock().await.insert(user_id, player);
     }
 
     pub async fn enqueue(&self, bytes: Vec<u8>) {
