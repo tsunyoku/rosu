@@ -4,9 +4,12 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)]
 
+extern crate redis;
+
 mod constants;
 mod objects;
 mod packets;
+mod pubsubs;
 
 use bcrypt;
 use ntex::http::{HeaderMap, Method};
@@ -41,6 +44,7 @@ lazy_static! {
 }
 
 static db: OnceCell<Pool<MySql>> = OnceCell::new();
+static redis: OnceCell<redis::Client> = OnceCell::new();
 
 #[inline(always)]
 async fn login(data: Vec<u8>, headers: &HeaderMap) -> (String, Vec<u8>) {
@@ -263,6 +267,13 @@ async fn main() -> std::io::Result<()> {
         .unwrap();
 
     db.set(pool).unwrap();
+
+    let r = redis::Client::open("redis://127.0.0.1/").unwrap();
+    redis.set(r).unwrap();
+
+    tokio::spawn(async move {
+        pubsubs::initialise_pubsubs().await;
+    });
 
     web::server(move || {
         App::new()

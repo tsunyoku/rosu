@@ -237,6 +237,10 @@ impl User {
     pub async fn logout(&mut self) {
         players.remove(self.id).await;
 
+        for channel in self.channels.values() {
+            channel.remove_user(self.id).await;
+        }
+
         if !self.restricted() {
             players.enqueue(handlers::logout(self.id)).await;
         }
@@ -281,6 +285,23 @@ impl User {
 
         self.enqueue(handlers::host_spectator_left(user.id)).await;
         println!("{} stopped spectating {}", user.username, self.username);
+    }
+
+    // generic function to do all actions after a confirmed restriction
+    pub async fn handle_restriction(&mut self) {
+        self.refresh_privileges().await; // reset their internal privileges for stuff
+
+        // relog user so their panel etc. naturally refreshes
+        self.enqueue(
+            handlers::server_restart(0)
+        ).await;
+    }
+
+    pub async fn refresh_privileges(&mut self) {
+        self.privileges = sqlx::query_as::<_, Privileges>("SELECT privileges FROM users WHERE id = ?")
+            .bind(self.id)
+            .fetch_one(db.get().unwrap())
+            .await.unwrap();
     }
 }
 

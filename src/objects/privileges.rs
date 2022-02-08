@@ -1,6 +1,7 @@
 use bitflags::bitflags;
 
 bitflags! {
+    #[derive(sqlx::FromRow)]
     pub struct Privileges: i64 {
         const USER_PUBLIC               = 1;
         const USER_NORMAL               = 2 << 0;
