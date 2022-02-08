@@ -4,7 +4,7 @@ use tokio::sync::RwLock;
 use std::sync::Arc;
 
 // Structure representing an in-game channel meant for chatting.
-struct Channel {
+pub struct Channel {
     pub id: i32,
     pub name: String,
     pub description: String,
@@ -21,9 +21,11 @@ impl Channel {
     // Handles removing a user from the channel.
     pub async fn remove_user(&self, user_id: i32) {
         if let Some(user_locked) = self.users.get_id(user_id.clone()).await {
-            let mut user = user_locked.read().await;
+            let mut user = user_locked.write().await;
+
             // Remove channel arc.
-            user.channels.remove(user_id.clone());
+            user.channels.remove(&self.name);
+
             self.users.remove(user_id).await;
         } else {
             println!("Tried to remove a user from a channel they weren't a part of?");
@@ -38,12 +40,12 @@ impl Channel {
             player.id.clone(),
             content,
             self.name.clone(),
-        ));
+        )).await;
     }
 
     pub async fn send_message_userid(&self, user_id: i32, content: String) {
         if let Some(player_locked) = self.users.get_id(user_id).await {
-            self.send_message(player_locked, content);
+            self.send_message(player_locked, content).await;
         }
     }
 

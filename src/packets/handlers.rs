@@ -15,56 +15,56 @@ use futures::future::{BoxFuture, FutureExt};
 pub fn user_id(user_id: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_USER_ID);
     writer += user_id;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn notification(notification: &str) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_NOTIFICATION);
     writer += notification;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn protocol_version(version: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_PROTOCOL_VERSION);
     writer += version;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn bancho_privileges(privs: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_PRIVILEGES);
     writer += privs;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn channel_info_end() -> Vec<u8> {
     // lol this is so stupid
     let mut writer = PacketWriter::new(Packets::CHO_CHANNEL_INFO_END);
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn main_menu_icon(icon: &str, link: &str) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_MAIN_MENU_ICON);
     writer += format!("{}|{}", icon, link).as_str();
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn friends_list(user: &User) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_FRIENDS_LIST);
     writer += &user.friends;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn silence_end(silence_end: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_SILENCE_END);
     writer += silence_end;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
@@ -80,7 +80,7 @@ pub fn user_presence(user: &User) -> Vec<u8> {
     writer += user.lat;
     writer += 0 as i32; // user rank (hardcode for now)
 
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
@@ -104,14 +104,14 @@ pub fn user_stats(user: &User) -> Vec<u8> {
     writer += 0 as i32; // global rank
     writer += stats.pp as i16;
 
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn server_restart(time: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_RESTART);
     writer += time;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
@@ -121,42 +121,42 @@ pub fn logout(user_id: i32) -> Vec<u8> {
     writer += user_id;
     writer += 0 as u8; // logout timeout?
 
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn spectator_joined(user_id: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_FELLOW_SPECTATOR_JOINED);
     writer += user_id;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn host_spectator_joined(user_id: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_SPECTATOR_JOINED);
     writer += user_id;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn spectator_left(user_id: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_FELLOW_SPECTATOR_LEFT);
     writer += user_id;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn host_spectator_left(user_id: i32) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_SPECTATOR_LEFT);
     writer += user_id;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
 pub fn spectate_frames(frames: Vec<u8>) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::OSU_SPECTATE_FRAMES);
     writer += frames;
-    return writer.serialize();
+    return writer.serialise();
 }
 
 #[inline(always)]
@@ -166,7 +166,7 @@ pub fn channel_message(src_name: String, src_id: i32, content: String, target_na
     writer += content;
     writer += target_name;
     writer += src_id;
-    return writer.serialize(); // Ew american.
+    return writer.serialise();
 }
 
 pub type HandlerHashMap = HashMap<
@@ -229,7 +229,7 @@ register_packets! {
     #[inline(always)]
     pub async fn ping(user: &mut User, reader: &mut Reader) -> bool {
         let mut writer = PacketWriter::new(Packets::CHO_PONG);
-        let pong = writer.serialize();
+        let pong = writer.serialise();
 
         user.enqueue(pong).await;
         return true;
@@ -392,7 +392,7 @@ register_packets! {
 
         let frames_packet = spectate_frames(frames);
         for u in players.players.lock().await.values() {
-            let _user = &u.read().await;
+            let _user = u.read().await;
 
             _user.enqueue(frames_packet.clone()).await;
         }

@@ -2,7 +2,7 @@ use crate::constants::CountryCodes;
 use crate::objects::mode::{Mode, Stats};
 use crate::objects::mods::Mods;
 use crate::objects::privileges::{BanchoPrivileges, Privileges};
-use crate::objects::channel;
+use crate::objects::channel::Channel;
 use crate::packets::handlers;
 use crate::{players, db};
 
@@ -194,6 +194,7 @@ impl User {
                     friends: friends_vec,
                     spectating: None,
                     spectators: Vec::new(),
+                    channels: HashMap::new(),
                 });
             }
             _ => return None,
@@ -376,7 +377,7 @@ impl PlayerList {
         return None;
     }
 
-    pub async fn remove(&mut self, user_id: i32) {
+    pub async fn remove(&self, user_id: i32) {
         self.players.lock().await.remove(&user_id);
     }
 }

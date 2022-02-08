@@ -100,7 +100,7 @@ impl PacketWriter {
     }
 
     #[inline(always)]
-    pub fn serialize(&mut self) -> Vec<u8> {
+    pub fn serialise(&mut self) -> Vec<u8> {
         let mut return_data: Vec<u8> = Vec::new();
 
         // first add packet id
