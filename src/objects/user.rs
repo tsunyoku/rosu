@@ -1,52 +1,26 @@
-use crate::constants::CountryCodes;
-use crate::objects::mode::{Mode, Stats};
-use crate::objects::mods::Mods;
-use crate::objects::privileges::{BanchoPrivileges, Privileges};
+use crate::constants::privileges::{BanchoPrivileges, Privileges};
+use crate::objects::queue::PacketQueue;
 use crate::objects::channel::Channel;
+use crate::constants::country::CountryCodes;
+use crate::constants::action::Action;
+use crate::objects::stats::Stats;
+use crate::constants::mode::Mode;
+use crate::objects::mods::Mods;
 use crate::packets::handlers;
 use crate::{players, db};
 
 use uuid::Uuid;
 
-use serde::{Serialize, Serializer};
-use std::str::FromStr;
-use num_derive::FromPrimitive;
-
 use strum::IntoEnumIterator;
+use std::str::FromStr;
 
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
 
 macro_rules! pub_struct { // w.
     ($name:ident {$($field:ident: $t:ty,)*}) => {
         pub struct $name {
             $(pub $field: $t),*
         }
-    }
-}
-
-pub struct PacketQueue {
-    queue: Mutex<Vec<u8>>,
-}
-
-impl PacketQueue {
-    pub fn new() -> Self {
-        return Self {
-            queue: Mutex::new(Vec::with_capacity(512)),
-        };
-    }
-
-    #[inline(always)]
-    pub async fn dequeue(&self) -> Vec<u8> {
-        let mut queue = self.queue.lock().await;
-        let queue_vec = queue.clone();
-
-        queue.clear();
-        return queue_vec;
-    }
-
-    pub async fn enqueue(&self, bytes: Vec<u8>) {
-        self.queue.lock().await.extend(bytes);
     }
 }
 
@@ -302,103 +276,5 @@ impl User {
             .bind(self.id)
             .fetch_one(db.get().unwrap())
             .await.unwrap();
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, FromPrimitive)]
-#[repr(u8)]
-pub enum Action {
-    Idle = 0,
-    Afk = 1,
-    Playing = 2,
-    Editing = 3,
-    Modding = 4,
-    Multiplayer = 5,
-    Watching = 6,
-    Unknown = 7,
-    Testing = 8,
-    Submitting = 9,
-    Paused = 10,
-    Lobby = 11,
-    Multiplaying = 12,
-    OsuDirect = 13,
-}
-
-impl Serialize for Action {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u8(*self as u8)
-    }
-}
-
-pub struct PlayerList {
-    pub players: Mutex<HashMap<i32, Arc<RwLock<User>>>>,
-}
-
-impl PlayerList {
-    pub fn new() -> Self {
-        return Self {
-            players: Mutex::new(HashMap::new()),
-        };
-    }
-
-    pub async fn player_count(&self) -> usize {
-        return self.players.lock().await.len();
-    }
-
-    pub async fn add_player(&self, player: User) {
-        let user_id = player.id.clone();
-
-        let player_arc = Arc::from(RwLock::from(player));
-        self.players.lock().await.insert(user_id, player_arc);
-    }
-
-    // Adds an rwlocked player shared pointer to the player list.
-    pub async fn add_player_ptr(&self, player: Arc<RwLock<User>>) {
-        let user_id = player.read().await.id.clone();
-        self.players.lock().await.insert(user_id, player);
-    }
-
-    pub async fn enqueue(&self, bytes: Vec<u8>) {
-        for player in self.players.lock().await.values() {
-            let user = player.read().await;
-            println!("playerlist enqueue sent to {}", user.username);
-            user.enqueue(bytes.clone()).await;
-        }
-    }
-
-    pub async fn get_id(&self, user_id: i32) -> Option<Arc<RwLock<User>>> {
-        match self.players.lock().await.get(&user_id) {
-            Some(u) => Some(u.clone()),
-            _ => None,
-        }
-    }
-
-    pub async fn get_username(&self, username: &str) -> Option<Arc<RwLock<User>>> {
-        for u in self.players.lock().await.values() {
-            let player = u.read().await;
-            if &player.username == username {
-                return Some(u.clone());
-            }
-        }
-
-        return None;
-    }
-
-    pub async fn get_token(&self, token: &str) -> Option<Arc<RwLock<User>>> {
-        for u in self.players.lock().await.values() {
-            let player = u.read().await;
-            if &player.token == token {
-                return Some(u.clone());
-            }
-        }
-
-        return None;
-    }
-
-    pub async fn remove(&self, user_id: i32) {
-        self.players.lock().await.remove(&user_id);
     }
 }

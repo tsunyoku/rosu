@@ -1,4 +1,5 @@
-use crate::objects::user::{PlayerList, User};
+use crate::objects::user::User;
+use crate::objects::players::PlayerList;
 use crate::packets::handlers::channel_message;
 use tokio::sync::RwLock;
 use std::sync::Arc;
