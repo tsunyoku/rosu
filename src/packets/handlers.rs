@@ -1,16 +1,16 @@
-use crate::constants::packets::Packets;
-use crate::objects::user::User;
 use crate::constants::action::Action;
 use crate::constants::mode::Mode;
+use crate::constants::packets::Packets;
 use crate::objects::mods::Mods;
+use crate::objects::user::User;
 use crate::packets::reader::Reader;
 use crate::packets::writer::PacketWriter;
 use crate::players;
 
-use tokio::sync::RwLockReadGuard;
-use std::collections::HashMap;
-use num_traits::FromPrimitive;
 use futures::future::{BoxFuture, FutureExt};
+use num_traits::FromPrimitive;
+use std::collections::HashMap;
+use tokio::sync::RwLockReadGuard;
 
 #[inline(always)]
 pub fn user_id(user_id: i32) -> Vec<u8> {
@@ -161,7 +161,12 @@ pub fn spectate_frames(frames: Vec<u8>) -> Vec<u8> {
 }
 
 #[inline(always)]
-pub fn channel_message(src_name: String, src_id: i32, content: String, target_name: String) -> Vec<u8> {
+pub fn channel_message(
+    src_name: String,
+    src_id: i32,
+    content: String,
+    target_name: String,
+) -> Vec<u8> {
     let mut writer = PacketWriter::new(Packets::CHO_SEND_MESSAGE);
 
     writer += src_name;
@@ -173,11 +178,9 @@ pub fn channel_message(src_name: String, src_id: i32, content: String, target_na
 }
 
 pub type HandlerHashMap = HashMap<
-            Packets,
-            for<'lt> fn(
-                user: &'lt mut User,
-                reader: &'lt mut Reader,
-            ) -> BoxFuture<'lt, bool>>;
+    Packets,
+    for<'lt> fn(user: &'lt mut User, reader: &'lt mut Reader) -> BoxFuture<'lt, bool>,
+>;
 
 macro_rules! register_packets {(
     $(
@@ -213,7 +216,7 @@ macro_rules! register_packets {(
 
         pub static ref RESTRICTED_PACKET_HANDLERS: HandlerHashMap = {
             let mut map = HashMap::new();
-            $( 
+            $(
                 if $res {
                     map.insert($id, $fname as _);
                 }
@@ -399,7 +402,7 @@ register_packets! {
 
             _user.enqueue(frames_packet.clone()).await;
         }
-        
+
         return false;
     }
 

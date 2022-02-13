@@ -10,12 +10,12 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::constants::packets::Packets;
 use crate::objects::user::User;
 use crate::packets::handlers::{self, PACKET_HANDLERS, RESTRICTED_PACKET_HANDLERS};
 use crate::packets::reader::Reader;
-use crate::constants::packets::Packets;
 
-use crate::{players, bcrypt_cache, reader};
+use crate::{bcrypt_cache, players, reader};
 
 use num_traits::FromPrimitive;
 

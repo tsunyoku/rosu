@@ -1,5 +1,5 @@
-use tokio::sync::{Mutex, RwLock};
 use std::{collections::HashMap, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 
 use crate::objects::user::User;
 

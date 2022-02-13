@@ -1,6 +1,6 @@
-pub mod mods;
-pub mod user;
 pub mod channel;
-pub mod stats;
-pub mod queue;
+pub mod mods;
 pub mod players;
+pub mod queue;
+pub mod stats;
+pub mod user;

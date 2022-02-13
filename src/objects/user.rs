@@ -1,18 +1,18 @@
-use crate::constants::privileges::{BanchoPrivileges, Privileges};
-use crate::objects::queue::PacketQueue;
-use crate::objects::channel::Channel;
-use crate::constants::country::CountryCodes;
 use crate::constants::action::Action;
-use crate::objects::stats::Stats;
+use crate::constants::country::CountryCodes;
 use crate::constants::mode::Mode;
+use crate::constants::privileges::{BanchoPrivileges, Privileges};
+use crate::objects::channel::Channel;
 use crate::objects::mods::Mods;
+use crate::objects::queue::PacketQueue;
+use crate::objects::stats::Stats;
 use crate::packets::handlers;
-use crate::{players, db};
+use crate::{db, players};
 
 use uuid::Uuid;
 
-use strum::IntoEnumIterator;
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -85,12 +85,7 @@ pub_struct!(User {
 
 impl User {
     // perhaps the worst part of this entire code rn
-    pub async fn from_sql(
-        username: &str,
-        token: Uuid,
-        osu_ver: &str,
-        offset: i32,
-    ) -> Option<Self> {
+    pub async fn from_sql(username: &str, token: Uuid, osu_ver: &str, offset: i32) -> Option<Self> {
         let user_row = sqlx::query!(
             "select * from users where username_safe = ?",
             username.to_lowercase().replace(" ", "_")
@@ -107,10 +102,13 @@ impl User {
                         .unwrap()
                         .country;
 
-                let friend_rows = sqlx::query!("select user2 from users_relationships where user1 = ?", user_row.id)
-                                    .fetch_all(db.get().unwrap())
-                                    .await
-                                    .unwrap();
+                let friend_rows = sqlx::query!(
+                    "select user2 from users_relationships where user1 = ?",
+                    user_row.id
+                )
+                .fetch_all(db.get().unwrap())
+                .await
+                .unwrap();
 
                 let friends_vec = friend_rows.iter().map(|v| v.user2).collect::<Vec<i32>>();
 
@@ -194,7 +192,8 @@ impl User {
             .bind(self.id)
             .bind(target)
             .execute(db.get().unwrap())
-            .await.unwrap();
+            .await
+            .unwrap();
     }
 
     pub async fn remove_friend(&mut self, target: i32) {
@@ -205,7 +204,8 @@ impl User {
             .bind(self.id)
             .bind(target)
             .execute(db.get().unwrap())
-            .await.unwrap();
+            .await
+            .unwrap();
     }
 
     pub async fn logout(&mut self) {
@@ -266,15 +266,15 @@ impl User {
         self.refresh_privileges().await; // reset their internal privileges for stuff
 
         // relog user so their panel etc. naturally refreshes
-        self.enqueue(
-            handlers::server_restart(0)
-        ).await;
+        self.enqueue(handlers::server_restart(0)).await;
     }
 
     pub async fn refresh_privileges(&mut self) {
-        self.privileges = sqlx::query_as::<_, Privileges>("SELECT privileges FROM users WHERE id = ?")
-            .bind(self.id)
-            .fetch_one(db.get().unwrap())
-            .await.unwrap();
+        self.privileges =
+            sqlx::query_as::<_, Privileges>("SELECT privileges FROM users WHERE id = ?")
+                .bind(self.id)
+                .fetch_one(db.get().unwrap())
+                .await
+                .unwrap();
     }
 }

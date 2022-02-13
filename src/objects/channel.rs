@@ -1,8 +1,8 @@
-use crate::objects::user::User;
 use crate::objects::players::PlayerList;
+use crate::objects::user::User;
 use crate::packets::handlers::channel_message;
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 // Structure representing an in-game channel meant for chatting.
 pub struct Channel {
@@ -31,17 +31,18 @@ impl Channel {
         } else {
             println!("Tried to remove a user from a channel they weren't a part of?");
         }
-        
     }
 
     pub async fn send_message(&self, player: Arc<RwLock<User>>, content: String) {
         let player = player.read().await;
-        self.users.enqueue(channel_message(
-            player.username.clone(),
-            player.id.clone(),
-            content,
-            self.name.clone(),
-        )).await;
+        self.users
+            .enqueue(channel_message(
+                player.username.clone(),
+                player.id.clone(),
+                content,
+                self.name.clone(),
+            ))
+            .await;
     }
 
     pub async fn send_message_userid(&self, user_id: i32, content: String) {
@@ -49,6 +50,4 @@ impl Channel {
             self.send_message(player_locked, content).await;
         }
     }
-
-
 }

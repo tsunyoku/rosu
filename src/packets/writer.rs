@@ -1,11 +1,11 @@
 extern crate alloc;
 
-use byteorder::LittleEndian;
 use alloc::string::String;
-use std::ops::{Add, AddAssign};
 use alloc::vec::Vec;
 use bincode::Infinite;
+use byteorder::LittleEndian;
 use serde::Serialize;
+use std::ops::{Add, AddAssign};
 
 use crate::constants::packets::Packets;
 
@@ -19,21 +19,15 @@ pub fn write_raw<T: Serialize>(data: T) -> Vec<u8> {
     let mut data_bytes: Vec<u8> = Vec::new();
 
     if std::any::type_name::<T>() == "&alloc::string::String" {
-        let packet_string = unsafe {
-            std::mem::transmute_copy::<T, &alloc::string::String>(&data)
-        };
+        let packet_string = unsafe { std::mem::transmute_copy::<T, &alloc::string::String>(&data) };
 
         data_bytes = write_osu_string(packet_string.to_string());
     } else if std::any::type_name::<T>() == "&str" {
-        let packet_str = unsafe {
-            std::mem::transmute_copy::<T, &str>(&data)
-        };
+        let packet_str = unsafe { std::mem::transmute_copy::<T, &str>(&data) };
 
         data_bytes = write_osu_string(packet_str.to_string());
     } else if std::any::type_name::<T>() == "&alloc::vec::Vec<i32>" {
-        let int_list = unsafe {
-            std::mem::transmute_copy::<T, &alloc::vec::Vec<i32>>(&data)
-        };
+        let int_list = unsafe { std::mem::transmute_copy::<T, &alloc::vec::Vec<i32>>(&data) };
 
         data_bytes.extend(pack(&(int_list.len() as u16)));
         for data_elem in int_list {
@@ -84,15 +78,15 @@ pub fn write_osu_string(_value: String) -> Vec<u8> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct PacketWriter {
     packet: Packets,
-    data: Vec<u8> // we barely actually need any attributes, we just like the functions.
+    data: Vec<u8>, // we barely actually need any attributes, we just like the functions.
 }
 
 impl PacketWriter {
     pub fn new(packet: Packets) -> Self {
         return Self {
             packet: packet,
-            data: Vec::new()
-        }
+            data: Vec::new(),
+        };
     }
 
     pub fn write<T: Serialize>(&mut self, packet_data: T) {
@@ -134,7 +128,7 @@ macro_rules! packet_impl {
                 self.write(data);
             }
         }
-    }
+    };
 }
 
 packet_impl!(u8);
@@ -179,7 +173,7 @@ impl AddAssign<&Vec<i32>> for PacketWriter {
 }
 
 impl Add<&str> for PacketWriter {
-       type Output = PacketWriter;
+    type Output = PacketWriter;
 
     fn add(mut self, data: &str) -> PacketWriter {
         self.write(data);

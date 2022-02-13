@@ -6,11 +6,11 @@
 
 extern crate redis;
 
+mod bancho;
 mod constants;
 mod objects;
 mod packets;
 mod pubsubs;
-mod bancho;
 
 use ntex::http::Method;
 use ntex::util::Bytes;
