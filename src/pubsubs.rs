@@ -18,16 +18,6 @@ async fn bot_msg_handler(raw: &str) {
     unimplemented!(); // TODO: actually send msg
 }
 
-async fn change_password_handler(md5: &str) {
-    // XX: do i even need this? it's not bound per user.
-    let mut cache = bcrypt_cache.lock().await;
-    if cache.contains_key(md5) {
-        cache.remove(md5);
-    }
-
-    // TODO: maybe pre-cache their bcrypt here?
-}
-
 async fn change_username_handler(raw: &str) {
     let data: Value = serde_json::from_str(raw).unwrap(); // userID, newUsername
 
@@ -70,7 +60,12 @@ pub async fn initialise_pubsubs() {
     let conn = redis.get().unwrap().get_async_connection().await.unwrap();
     let mut pubsub_conn = conn.into_pubsub();
 
-    for pubsub in vec!["peppy:ban"] {
+    for pubsub in vec![
+        "peppy:ban",
+        "peppy:bot_msg",
+        "peppy:disconnect",
+        "peppy:notification",
+    ] {
         pubsub_conn.subscribe(pubsub).await.unwrap();
     }
 
@@ -83,7 +78,6 @@ pub async fn initialise_pubsubs() {
         match channel {
             "peppy:ban" => ban_handler(i32::from_str(&content).unwrap()).await,
             "peppy:bot_msg" => bot_msg_handler(&content).await,
-            "peppy:change_pass" => change_password_handler(&content).await,
             "peppy:disconnect" => disconnect_handler(&content).await,
             "peppy:notification" => notification_handler(&content).await,
             _ => continue,
